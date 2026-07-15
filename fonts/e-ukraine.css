@@ -1,0 +1,49 @@
+/* e-Ukraine — self-hosted (same files as mod.gov.ua design system) */
+
+@font-face {
+  font-family: "e-Ukraine";
+  src: url("../mod-assets/media/e_Ukraine_Thin-s.p.1c8a-ekz1hmaz.otf") format("opentype");
+  font-display: swap;
+  font-weight: 100;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "e-Ukraine";
+  src: url("../mod-assets/media/e_Ukraine_UltraLight-s.p.20x9_j9rc0z4r.otf") format("opentype");
+  font-display: swap;
+  font-weight: 200;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "e-Ukraine";
+  src: url("../mod-assets/media/e_Ukraine_Light-s.p.0tvo96ft8_vhs.otf") format("opentype");
+  font-display: swap;
+  font-weight: 300;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "e-Ukraine";
+  src: url("../mod-assets/media/e_Ukraine_Regular-s.p.2cx0b4ctisiul.otf") format("opentype");
+  font-display: swap;
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "e-Ukraine";
+  src: url("../mod-assets/media/e_Ukraine_Medium-s.p.3ghr70wqg4n18.otf") format("opentype");
+  font-display: swap;
+  font-weight: 500;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "e-Ukraine";
+  src: url("../mod-assets/media/e_Ukraine_Bold-s.p.1t1-wmjee4_ky.otf") format("opentype");
+  font-display: swap;
+  font-weight: 700;
+  font-style: normal;
+}
