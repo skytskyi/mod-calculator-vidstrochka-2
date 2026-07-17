@@ -1505,9 +1505,21 @@ body.mod-nav-open {
 }
 
 @media (max-width: 899px) {
-  .wizard__main,
-  .wizard-results {
+  .wizard__main {
     padding: 20px 16px;
+  }
+
+  .wizard-results {
+    padding: 20px 12px;
+  }
+
+  .results-card {
+    padding: 20px 12px;
+  }
+
+  .input-summary__row {
+    grid-template-columns: minmax(0, 0.4fr) minmax(0, 0.6fr);
+    gap: 12px;
   }
 
   .wizard__question {
