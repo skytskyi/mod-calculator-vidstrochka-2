@@ -12,20 +12,21 @@ def build_calculator_browser() -> None:
     calc_src = calc_src.replace("export const ContractType", "const ContractType")
     calc_src = calc_src.replace("export const ServiceStatus", "const ServiceStatus")
     calc_src = calc_src.replace("export const CombatAssignment", "const CombatAssignment")
+    calc_src = calc_src.replace("export const CombatUnitType", "const CombatUnitType")
     calc_src = calc_src.replace("export const WAR_START_DATE", "const WAR_START_DATE")
+    calc_src = calc_src.replace("export const RESOLUTION_768_URL", "const RESOLUTION_768_URL")
+    calc_src = calc_src.replace("export const RESOLUTION_768_CITE", "const RESOLUTION_768_CITE")
     calc_src = calc_src.replace("export function ", "function ")
 
     browser_calc = f"""(function (global) {{
   const {{
-    addDays,
     addMonths,
-    addYears,
     intervalToDuration,
     isAfter,
     isBefore,
     max: maxDate,
     min: minDate,
-    differenceInYears,
+    differenceInMonths,
   }} = global.DateFnsLite;
 
 {calc_src}
@@ -33,8 +34,20 @@ def build_calculator_browser() -> None:
     ContractType,
     ServiceStatus,
     CombatAssignment,
+    CombatUnitType,
     WAR_START_DATE,
-    differenceInFullYears,
+    RESOLUTION_768_URL,
+    RESOLUTION_768_CITE,
+    formatResolutionCite,
+    resolveContractTermMonths,
+    resolveCombatDivisor,
+    getServiceFieldFlags,
+    calculateCombatMonths,
+    calculateBefore2022Contribution,
+    calculateAfter2022Contribution,
+    differenceInFullMonths,
+    calculateMonthsBefore2022,
+    calculateMonthsAfter2022,
     calculateYearsBefore2022,
     calculateYearsAfter2022,
     calculateContractDuration,
@@ -44,6 +57,7 @@ def build_calculator_browser() -> None:
     calculate,
     formatDurationParts,
     formatThirtyDayMonthDuration,
+    getGuaranteedDeferralLabel,
     getCombatAssignmentExplanationLabel,
     getCombatExplanationLabel,
     getCombatExplanationLabels,
@@ -68,7 +82,7 @@ def build_form_browser() -> None:
 
     browser_form = f"""(function () {{
   const {{ format }} = window.DateFnsLite;
-  const {{ ContractType, ServiceStatus, calculate, formatDurationParts, getCombatExplanationLabels }} = window.DeferralCalculator;
+  const {{ ContractType, ServiceStatus, RESOLUTION_768_URL, RESOLUTION_768_CITE, calculate, getCombatExplanationLabels }} = window.DeferralCalculator;
 
 {form_src}
 }})();

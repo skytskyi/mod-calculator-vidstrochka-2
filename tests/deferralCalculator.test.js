@@ -2,225 +2,240 @@ import { describe, expect, it } from "vitest";
 import {
   ContractType,
   ServiceStatus,
+  CombatUnitType,
   calculate,
-  calculateYearsAfter2022,
-  calculateYearsBefore2022,
+  calculateMonthsAfter2022,
+  calculateMonthsBefore2022,
+  calculateCombatMonths,
+  calculateBefore2022Contribution,
+  calculateAfter2022Contribution,
+  resolveContractTermMonths,
+  resolveCombatDivisor,
   calculateContractEndDate,
-  formatThirtyDayMonthDuration,
 } from "../src/deferralCalculator.js";
 
-describe("calculateYearsBefore2022", () => {
-  it("counts full years before 24.02.2022", () => {
-    expect(calculateYearsBefore2022(new Date(2020, 3, 15))).toBe(1);
-  });
-
-  it("returns 0 when service starts after war date", () => {
-    expect(calculateYearsBefore2022(new Date(2022, 5, 1))).toBe(0);
-  });
-
-  it("caps counting at discharge date when service ended before war", () => {
+describe("resolveContractTermMonths", () => {
+  it("maps assault terms by status", () => {
     expect(
-      calculateYearsBefore2022(new Date(2018, 0, 1), new Date(2019, 5, 1))
-    ).toBe(1);
+      resolveContractTermMonths(ServiceStatus.OBLIGATED, ContractType.ASSAULT)
+    ).toBe(14);
+    expect(
+      resolveContractTermMonths(ServiceStatus.ACTIVE, ContractType.ASSAULT)
+    ).toBe(10);
+    expect(
+      resolveContractTermMonths(ServiceStatus.DISCHARGED, ContractType.ASSAULT)
+    ).toBe(6);
   });
 
-  it("returns 0 when discharge is on or before service start", () => {
+  it("requires term choice for discharged combat/basic", () => {
     expect(
-      calculateYearsBefore2022(new Date(2020, 3, 15), new Date(2020, 3, 15))
-    ).toBe(0);
+      resolveContractTermMonths(
+        ServiceStatus.DISCHARGED,
+        ContractType.COMBAT,
+        6
+      )
+    ).toBe(6);
+    expect(
+      resolveContractTermMonths(
+        ServiceStatus.DISCHARGED,
+        ContractType.BASIC,
+        24
+      )
+    ).toBe(24);
+    expect(() =>
+      resolveContractTermMonths(ServiceStatus.DISCHARGED, ContractType.COMBAT)
+    ).toThrow("Оберіть термін контракту");
   });
 });
 
-describe("calculateYearsAfter2022", () => {
-  it("counts full years from war date to contract signing", () => {
-    expect(
-      calculateYearsAfter2022(new Date(2022, 1, 24), new Date(2026, 8, 1))
-    ).toBe(4);
+describe("combat months and divisors", () => {
+  it("uses ceiling for combat days", () => {
+    expect(calculateCombatMonths(1, 30)).toBe(1);
+    expect(calculateCombatMonths(31, 30)).toBe(2);
+    expect(calculateCombatMonths(7, 10)).toBe(1);
+    expect(calculateCombatMonths(15, 10)).toBe(2);
+    expect(calculateCombatMonths(15, 30)).toBe(1);
+    expect(calculateCombatMonths(0, 10)).toBe(0);
   });
 
-  it("uses service start when it is after war date", () => {
-    expect(
-      calculateYearsAfter2022(new Date(2023, 0, 1), new Date(2026, 8, 1))
-    ).toBe(3);
+  it("resolves divisors by term and unit type", () => {
+    expect(resolveCombatDivisor(6, CombatUnitType.COMBAT_UNIT)).toBe(10);
+    expect(resolveCombatDivisor(6, CombatUnitType.NON_COMBAT_UNIT)).toBe(30);
+    expect(resolveCombatDivisor(10, CombatUnitType.NON_COMBAT_UNIT)).toBe(10);
+    expect(resolveCombatDivisor(14, CombatUnitType.COMBAT_UNIT)).toBe(10);
+    expect(resolveCombatDivisor(24, CombatUnitType.COMBAT_UNIT)).toBe(30);
+  });
+});
+
+describe("service month contributions", () => {
+  it("adds +1 year bucket even for zero months", () => {
+    expect(calculateBefore2022Contribution(0)).toBe(1);
+    expect(calculateAfter2022Contribution(0)).toBe(6);
   });
 
-  it("caps counting at discharge date for discharged service members", () => {
+  it("caps months before 2022 at 480", () => {
+    expect(calculateBefore2022Contribution(480)).toBe(41);
+    expect(calculateBefore2022Contribution(600)).toBe(41);
+  });
+
+  it("counts full months before and after war date", () => {
     expect(
-      calculateYearsAfter2022(
-        new Date(2022, 1, 24),
-        new Date(2026, 8, 1),
-        new Date(2024, 5, 1)
+      calculateMonthsBefore2022(new Date(2017, 8, 1), undefined)
+    ).toBe(53);
+    expect(
+      calculateMonthsAfter2022(
+        new Date(2017, 8, 1),
+        new Date(2024, 2, 1),
+        undefined
       )
-    ).toBe(2);
+    ).toBe(24);
   });
 });
 
 describe("calculateContractEndDate", () => {
-  it("adds 14 months for assault contract", () => {
+  it("adds resolved term months", () => {
     const start = new Date(2026, 0, 1);
-    expect(calculateContractEndDate(start, ContractType.ASSAULT)).toEqual(
-      new Date(2027, 2, 1)
-    );
-  });
-
-  it("adds 24 months for combat contract", () => {
-    const start = new Date(2026, 0, 1);
-    expect(calculateContractEndDate(start, ContractType.COMBAT)).toEqual(
-      new Date(2028, 0, 1)
-    );
+    expect(calculateContractEndDate(start, 14)).toEqual(new Date(2027, 2, 1));
+    expect(calculateContractEndDate(start, 10)).toEqual(new Date(2026, 10, 1));
+    expect(calculateContractEndDate(start, 6)).toEqual(new Date(2026, 6, 1));
   });
 });
 
-describe("formatThirtyDayMonthDuration", () => {
-  it("converts combat days using 30-day months", () => {
-    expect(formatThirtyDayMonthDuration(45)).toBe("1 місяць 15 днів");
-    expect(formatThirtyDayMonthDuration(30)).toBe("1 місяць");
-    expect(formatThirtyDayMonthDuration(15)).toBe("15 днів");
-  });
-});
-
-describe("calculate", () => {
-  it("calculates assault deferral with combat days", () => {
+describe("test vectors V1–V7", () => {
+  it("V1: military + assault, full components → 2 years 8 months", () => {
     const result = calculate({
       serviceStatus: ServiceStatus.ACTIVE,
       contractType: ContractType.ASSAULT,
-      serviceStartDate: new Date(2020, 3, 15),
-      contractStartDate: new Date(2026, 8, 1),
-      combatDays: 45,
+      serviceStartDate: new Date(2017, 8, 1),
+      contractStartDate: new Date(2024, 2, 1),
+      combatUnitType: CombatUnitType.COMBAT_UNIT,
+      combatDays: 30,
     });
 
-    expect(result.yearsBefore2022).toBe(1);
-    expect(result.yearsAfter2022).toBe(4);
-    expect(result.contractEndDate).toEqual(new Date(2027, 10, 1));
-    expect(result.deferralEndDate).toEqual(new Date(2030, 6, 16));
-    expect(result.deferralDurationLabel).toBe("2 роки 8 місяців 17 днів");
-
-    const combatLine = result.explanation.find(function (line) {
-      return line.label === "Відстрочка за бойові завдання";
-    });
-    expect(combatLine?.detail).toBe("45 днів");
-    expect(combatLine?.contribution).toBe("1 місяць 15 днів");
+    expect(result.contractTermMonths).toBe(10);
+    expect(result.totalDeferralMonths).toBe(32);
+    expect(result.deferralDurationLabel).toBe("2 роки 8 місяців");
   });
 
-  it("calculates combat deferral with combat days as calendar days", () => {
+  it("V2: obligated + assault, 7 combat days → 7 months", () => {
     const result = calculate({
-      serviceStatus: ServiceStatus.DISCHARGED,
-      contractType: ContractType.COMBAT,
-      serviceStartDate: new Date(2020, 3, 15),
-      serviceEndDate: new Date(2026, 7, 1),
+      serviceStatus: ServiceStatus.OBLIGATED,
+      contractType: ContractType.ASSAULT,
       contractStartDate: new Date(2026, 8, 1),
-      combatAssignment: "FIRST_LINE",
-      combatDays: 15,
+      combatUnitType: CombatUnitType.COMBAT_UNIT,
+      combatDays: 7,
     });
 
-    expect(result.yearsBefore2022).toBe(1);
-    expect(result.yearsAfter2022).toBe(4);
-    expect(result.contractEndDate).toEqual(new Date(2028, 8, 1));
-    expect(result.deferralEndDate).toEqual(new Date(2029, 3, 16));
-    expect(result.deferralDuration).toEqual({ years: 0, months: 7, days: 15 });
-
-    const combatLine = result.explanation.find(function (line) {
-      return line.label === "Відстрочка за бойові завдання на першій лінії";
-    });
-    expect(combatLine?.detail).toBe("15 днів");
+    expect(result.contractTermMonths).toBe(14);
+    expect(result.totalDeferralMonths).toBe(7);
+    expect(result.deferralDurationLabel).toBe("7 місяців");
   });
 
-  it("limits discharged service years to the service period", () => {
+  it("V3: discharged + assault in combat units → 8 months", () => {
     const result = calculate({
       serviceStatus: ServiceStatus.DISCHARGED,
       contractType: ContractType.ASSAULT,
-      serviceStartDate: new Date(2020, 3, 15),
-      serviceEndDate: new Date(2024, 5, 1),
+      serviceStartDate: new Date(2020, 0, 1),
+      serviceEndDate: new Date(2025, 0, 1),
       contractStartDate: new Date(2026, 8, 1),
+      combatUnitType: CombatUnitType.COMBAT_UNIT,
+      combatDays: 15,
+    });
+
+    expect(result.contractTermMonths).toBe(6);
+    expect(result.totalDeferralMonths).toBe(8);
+    expect(result.deferralDurationLabel).toBe("8 місяців");
+  });
+
+  it("V4: discharged + assault not in combat units → 7 months", () => {
+    const result = calculate({
+      serviceStatus: ServiceStatus.DISCHARGED,
+      contractType: ContractType.ASSAULT,
+      serviceStartDate: new Date(2020, 0, 1),
+      serviceEndDate: new Date(2025, 0, 1),
+      contractStartDate: new Date(2026, 8, 1),
+      combatUnitType: CombatUnitType.NON_COMBAT_UNIT,
+      combatDays: 15,
+    });
+
+    expect(result.contractTermMonths).toBe(6);
+    expect(result.totalDeferralMonths).toBe(7);
+    expect(result.deferralDurationLabel).toBe("7 місяців");
+  });
+
+  it("V5: military + combat with service before 2022 → 1 year 9 months", () => {
+    const result = calculate({
+      serviceStatus: ServiceStatus.ACTIVE,
+      contractType: ContractType.COMBAT,
+      serviceStartDate: new Date(2010, 7, 1),
+      contractStartDate: new Date(2026, 8, 1),
+      combatUnitType: CombatUnitType.COMBAT_UNIT,
+      combatDays: 61,
+    });
+
+    expect(result.contractTermMonths).toBe(24);
+    expect(result.totalDeferralMonths).toBe(21);
+    expect(result.deferralDurationLabel).toBe("1 рік 9 місяців");
+  });
+
+  it("V6: discharged + combat from 6 months ignores service before 2022", () => {
+    const result = calculate({
+      serviceStatus: ServiceStatus.DISCHARGED,
+      contractType: ContractType.COMBAT,
+      contractTermChoice: 6,
+      serviceStartDate: new Date(2010, 7, 1),
+      serviceEndDate: new Date(2025, 0, 1),
+      contractStartDate: new Date(2026, 8, 1),
+      combatUnitType: CombatUnitType.COMBAT_UNIT,
+      combatDays: 5,
+    });
+
+    expect(result.contractTermMonths).toBe(6);
+    expect(result.monthsBefore2022).toBe(0);
+    expect(result.totalDeferralMonths).toBe(7);
+    expect(result.deferralDurationLabel).toBe("7 місяців");
+  });
+
+  it("V7: obligated + basic with zero combat → 6 months", () => {
+    const result = calculate({
+      serviceStatus: ServiceStatus.OBLIGATED,
+      contractType: ContractType.BASIC,
+      contractStartDate: new Date(2026, 8, 1),
+      combatUnitType: CombatUnitType.NON_COMBAT_UNIT,
       combatDays: 0,
     });
 
-    expect(result.yearsBefore2022).toBe(1);
-    expect(result.yearsAfter2022).toBe(2);
-    expect(result.deferralDurationLabel).toBe("2 роки 1 місяць");
+    expect(result.contractTermMonths).toBe(24);
+    expect(result.totalDeferralMonths).toBe(6);
+    expect(result.deferralDurationLabel).toBe("6 місяців");
   });
+});
 
+describe("validation", () => {
   it("rejects missing discharge date for discharged status", () => {
     expect(() =>
       calculate({
         serviceStatus: ServiceStatus.DISCHARGED,
-        contractType: ContractType.BASIC,
+        contractType: ContractType.ASSAULT,
         serviceStartDate: new Date(2020, 3, 15),
         contractStartDate: new Date(2026, 8, 1),
+        combatUnitType: CombatUnitType.COMBAT_UNIT,
         combatDays: 0,
       })
     ).toThrow("Вкажіть дату звільнення з військової служби");
   });
 
-  it("rejects discharge before service start", () => {
+  it("rejects missing term choice for discharged combat", () => {
     expect(() =>
       calculate({
         serviceStatus: ServiceStatus.DISCHARGED,
-        contractType: ContractType.BASIC,
-        serviceStartDate: new Date(2024, 0, 1),
-        serviceEndDate: new Date(2023, 0, 1),
-        contractStartDate: new Date(2026, 8, 1),
-        combatDays: 0,
-      })
-    ).toThrow(
-      "Дата звільнення з військової служби має бути пізнішою за дату початку служби"
-    );
-  });
-
-  it("rejects discharge on the same day as service start", () => {
-    expect(() =>
-      calculate({
-        serviceStatus: ServiceStatus.DISCHARGED,
-        contractType: ContractType.BASIC,
-        serviceStartDate: new Date(2024, 0, 1),
-        serviceEndDate: new Date(2024, 0, 1),
-        contractStartDate: new Date(2026, 8, 1),
-        combatDays: 0,
-      })
-    ).toThrow(
-      "Дата звільнення з військової служби має бути пізнішою за дату початку служби"
-    );
-  });
-
-  it("rejects discharge on or after contract start", () => {
-    expect(() =>
-      calculate({
-        serviceStatus: ServiceStatus.DISCHARGED,
-        contractType: ContractType.BASIC,
+        contractType: ContractType.COMBAT,
         serviceStartDate: new Date(2020, 3, 15),
-        serviceEndDate: new Date(2026, 8, 1),
+        serviceEndDate: new Date(2025, 0, 1),
         contractStartDate: new Date(2026, 8, 1),
+        combatUnitType: CombatUnitType.COMBAT_UNIT,
         combatDays: 0,
       })
-    ).toThrow(
-      "Дата звільнення з військової служби має бути ранішою за планову або фактичну дату підписання нового контракту"
-    );
-  });
-
-  it("rejects service start after contract start", () => {
-    expect(() =>
-      calculate({
-        serviceStatus: ServiceStatus.ACTIVE,
-        contractType: ContractType.BASIC,
-        serviceStartDate: new Date(2027, 0, 1),
-        contractStartDate: new Date(2026, 0, 1),
-        combatDays: 0,
-      })
-    ).toThrow(
-      "Дата початку військової служби не може бути пізнішою за планову або фактичну дату підписання нового контракту"
-    );
-  });
-
-  it("calculates obligated deferral without prior service years", () => {
-    const result = calculate({
-      serviceStatus: ServiceStatus.OBLIGATED,
-      contractType: ContractType.BASIC,
-      contractStartDate: new Date(2026, 8, 1),
-      combatDays: 0,
-    });
-
-    expect(result.yearsBefore2022).toBe(0);
-    expect(result.yearsAfter2022).toBe(0);
-    expect(result.deferralDurationLabel).toBe("6 місяців");
+    ).toThrow("Оберіть термін контракту");
   });
 });

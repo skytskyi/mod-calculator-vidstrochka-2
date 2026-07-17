@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Калькулятор відстрочок (підхід 2)</title>
+    <title>Калькулятор відстрочок</title>
     <link rel="stylesheet" href="mod-assets/chunks/2a5yihyim9w0-.css" />
     <link rel="stylesheet" href="mod-assets/chunks/236nqai0goexd.css" />
     <link rel="stylesheet" href="mod-assets/chunks/1dtsv40miusub.css" />
@@ -25,28 +25,12 @@
               <span>Сервіси</span>
               <svg class="breadcrumbs__sep" aria-hidden="true" fill="none" focusable="false" height="1em" role="presentation" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" viewBox="0 0 24 24" width="1em"><path d="m9 18 6-6-6-6"></path></svg>
               <span class="breadcrumbs__current"
-                >Калькулятор відстрочок (підхід 2)</span
+                >Калькулятор відстрочок</span
               >
             </nav>
 
-            <h1 class="title">Калькулятор відстрочок (підхід 2)</h1>
+            <h1 class="title">Калькулятор відстрочок</h1>
             <div class="title-rule" role="presentation"></div>
-
-            <div class="notice">
-              <img
-                class="notice__icon"
-                src="info_icon.svg"
-                width="25"
-                height="24"
-                alt=""
-              />
-              <p>
-                Калькулятор обчислює дату завершення нового мотиваційного контракту,
-                тривалість гарантованої відстрочки після звільнення та дату її
-                завершення відповідно до офіційних роз'яснень Міністерства оборони
-                України.
-              </p>
-            </div>
           </div>
 
           <div class="main__form-col">
@@ -171,7 +155,9 @@
                             <span class="radio-card__ui"></span>
                             <span class="radio-card__content">
                               <span class="radio-card__text">Піхотно-штурмовий контракт</span>
-                              <span class="radio-card__term">Термін контракту — 14 місяців</span>
+                              <span class="radio-card__term" id="contract-term-assault"
+                                >Термін контракту залежить від статусу</span
+                              >
                             </span>
                           </label>
                           <label class="radio-card">
@@ -179,7 +165,9 @@
                             <span class="radio-card__ui"></span>
                             <span class="radio-card__content">
                               <span class="radio-card__text">Бойовий контракт</span>
-                              <span class="radio-card__term">Термін контракту — 24 місяці</span>
+                              <span class="radio-card__term" id="contract-term-combat"
+                                >Термін контракту — 24 місяці</span
+                              >
                             </span>
                           </label>
                           <label class="radio-card">
@@ -187,7 +175,33 @@
                             <span class="radio-card__ui"></span>
                             <span class="radio-card__content">
                               <span class="radio-card__text">Базовий контракт</span>
-                              <span class="radio-card__term">Термін контракту — 24 місяці</span>
+                              <span class="radio-card__term" id="contract-term-basic"
+                                >Термін контракту — 24 місяці</span
+                              >
+                            </span>
+                          </label>
+                        </div>
+                      </fieldset>
+
+                      <fieldset
+                        class="field wizard-step__section"
+                        id="field-contract-term"
+                        hidden
+                      >
+                        <legend class="field__legend">Термін контракту</legend>
+                        <div class="radio-row radio-row--wizard">
+                          <label class="radio-card">
+                            <input type="radio" name="contractTermChoice" value="6" />
+                            <span class="radio-card__ui"></span>
+                            <span class="radio-card__content">
+                              <span class="radio-card__text">Від 6 місяців</span>
+                            </span>
+                          </label>
+                          <label class="radio-card">
+                            <input type="radio" name="contractTermChoice" value="24" />
+                            <span class="radio-card__ui"></span>
+                            <span class="radio-card__content">
+                              <span class="radio-card__text">24 місяці</span>
                             </span>
                           </label>
                         </div>
@@ -229,33 +243,32 @@
                       tabindex="-1"
                       hidden
                     >
-                      <fieldset class="field wizard-step__section" id="field-combat-assignment" hidden>
-                        <legend class="field__legend">Бойові завдання</legend>
+                      <fieldset class="field" id="field-combat-assignment">
+                        <legend class="field__legend">Участь у бойових діях</legend>
                         <div
                           class="combat-assignment-grid radio-row--wizard"
                           id="combat-assignment-grid"
                         >
-                          <label class="radio-card" id="combat-option-none">
-                            <input type="radio" name="combatAssignment" value="NONE" />
+                          <label class="radio-card" id="combat-option-combat-unit">
+                            <input
+                              type="radio"
+                              name="combatUnitType"
+                              value="COMBAT_UNIT"
+                            />
                             <span class="radio-card__ui"></span>
                             <span class="radio-card__content">
-                              <span class="radio-card__text" id="combat-option-none-label"
-                                >Без бойових завдань</span
-                              >
+                              <span class="radio-card__text">У бойових частинах</span>
                             </span>
                           </label>
-                          <label class="radio-card" id="combat-option-first-line" hidden>
-                            <input type="radio" name="combatAssignment" value="FIRST_LINE" />
+                          <label class="radio-card" id="combat-option-non-combat-unit">
+                            <input
+                              type="radio"
+                              name="combatUnitType"
+                              value="NON_COMBAT_UNIT"
+                            />
                             <span class="radio-card__ui"></span>
                             <span class="radio-card__content">
-                              <span class="radio-card__text">Бойові завдання на першій лінії</span>
-                            </span>
-                          </label>
-                          <label class="radio-card" id="combat-option-not-first-line">
-                            <input type="radio" name="combatAssignment" value="NOT_FIRST_LINE" />
-                            <span class="radio-card__ui"></span>
-                            <span class="radio-card__content">
-                              <span class="radio-card__text">Бойові завдання не на першій лінії</span>
+                              <span class="radio-card__text">Не у бойових частинах</span>
                             </span>
                           </label>
                         </div>
@@ -264,11 +277,9 @@
                       <div
                         class="field field--number wizard-step__section"
                         id="field-combat-days"
-                        hidden
                       >
                         <label class="field__legend" for="combat-days-input"
-                          >Кількість днів виконання бойових завдань під час нового
-                          контракту</label
+                          >Кількість днів участі в бойових діях (0 — без участі)</label
                         >
                         <div class="tariff-stepper">
                           <button
@@ -352,9 +363,23 @@
                 aria-live="polite"
               >
                 <h2 class="wizard-results__title">Результат розрахунку відстрочки</h2>
-                <p class="wizard-results__duration-label">Тривалість відстрочки</p>
-                <p class="wizard-results__duration" id="wizard-results-duration"></p>
-                <div class="wizard-results__rule" role="presentation"></div>
+                <section
+                  class="wizard-results__inputs"
+                  id="wizard-results-inputs"
+                  aria-labelledby="wizard-results-inputs-title"
+                >
+                  <h3 class="wizard-results__inputs-title" id="wizard-results-inputs-title">
+                    Ваші дані
+                  </h3>
+                  <div class="deferral-results__rule" role="presentation"></div>
+                  <dl class="input-summary" id="wizard-results-inputs-list"></dl>
+                  <div class="deferral-results__rule" role="presentation"></div>
+                  <div class="wizard-results__inputs-actions">
+                    <button type="button" class="btn-back" id="wizard-edit">
+                      Змінити дані
+                    </button>
+                  </div>
+                </section>
                 <section class="deferral-results__explanation">
                   <div class="deferral-results__subtitle-row">
                     <h3 class="deferral-results__subtitle">Пояснення розрахунку</h3>

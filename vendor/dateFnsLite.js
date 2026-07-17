@@ -56,6 +56,21 @@
     return years * sign;
   }
 
+  function differenceInMonths(dateLeft, dateRight) {
+    const sign = isBefore(dateLeft, dateRight) ? -1 : 1;
+    const earlier = sign < 0 ? dateLeft : dateRight;
+    const later = sign < 0 ? dateRight : dateLeft;
+    let months =
+      (later.getFullYear() - earlier.getFullYear()) * 12 +
+      (later.getMonth() - earlier.getMonth());
+
+    if (later.getDate() < earlier.getDate()) {
+      months -= 1;
+    }
+
+    return months * sign;
+  }
+
   function intervalToDuration(interval) {
     let remainingStart = new Date(interval.start.getTime());
     const end = interval.end;
@@ -105,6 +120,7 @@
     max,
     min,
     differenceInYears,
+    differenceInMonths,
     intervalToDuration,
     format,
   };
