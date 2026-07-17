@@ -677,8 +677,10 @@ body.mod-nav-open {
 }
 
 .title-rule {
-  height: 1px;
-  background: #b0b0b0;
+  border: 0;
+  border-bottom: 1px dotted rgb(107 107 107);
+  height: 0;
+  background: none;
   margin-bottom: 24px;
 }
 
@@ -1147,9 +1149,10 @@ body.mod-nav-open {
 
 .wizard__help {
   margin: 0 0 28px;
-  font-size: 15px;
-  line-height: 1.55;
-  color: var(--muted);
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 300;
+  color: #212121;
 }
 
 .wizard__help a,
@@ -1243,7 +1246,7 @@ body.mod-nav-open {
   gap: 16px;
   margin-top: 28px;
   padding-top: 24px;
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  border-top: none;
 }
 
 .wizard__nav .btn-next {
@@ -1287,10 +1290,6 @@ body.mod-nav-open {
 
 .wizard-results__inputs-title {
   margin: 0;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0 4px;
   font-size: 14px;
   line-height: 20px;
   font-weight: 500;
@@ -1443,7 +1442,7 @@ body.mod-nav-open {
 .wizard-results__cta {
   display: flex;
   justify-content: center;
-  margin-top: 24px;
+  margin-top: 16px;
   margin-bottom: 0;
 }
 
@@ -1452,7 +1451,7 @@ body.mod-nav-open {
   flex-direction: column;
   align-items: center;
   gap: 16px;
-  margin-top: 24px;
+  margin-top: 16px;
   padding-top: 0;
   border-top: none;
 }
@@ -1491,8 +1490,10 @@ body.mod-nav-open {
 }
 
 .wizard-results__edit.btn-text {
+  display: inline;
   padding: 0;
   min-height: 0;
+  gap: 0;
 }
 
 .btn-text__icon {
