@@ -32,8 +32,9 @@ const wizardPanel = document.getElementById("wizard-panel");
 const wizardResults = document.getElementById("wizard-results");
 const wizardResultsExplanation = document.getElementById("wizard-results-explanation");
 const wizardResultsInputsList = document.getElementById("wizard-results-inputs-list");
-const wizardEdit = document.getElementById("wizard-edit");
+const wizardResultsTotal = document.getElementById("wizard-results-total");
 const wizardRestart = document.getElementById("wizard-restart");
+const wizardEdit = document.getElementById("wizard-edit");
 
 let currentStepIndex = 0;
 
@@ -786,12 +787,12 @@ function formatDisplayDate(date) {
 }
 
 /**
+ * @param {ReturnType<typeof calculate> | null | undefined} [result]
  * @returns {{ label: string, value: string }[]}
  */
-function collectInputSummaryRows() {
+function collectInputSummaryRows(result) {
   const status = getSelectedServiceStatus();
   const type = getSelectedContractType();
-  const termChoice = getSelectedContractTermChoice();
   const combatUnitType = getSelectedCombatUnitType();
   const serviceStartDate = parseDateInput("service-start-date");
   const serviceEndDate = parseDateInput("service-end-date");
@@ -829,21 +830,21 @@ function collectInputSummaryRows() {
     });
   }
 
-  if (requiresContractTermChoice(status, type) && termChoice) {
+  if (contractStartDate) {
     rows.push({
-      label: "Термін контракту",
-      value: termChoice === 6 ? "Від 6 місяців" : "24 місяці",
+      label: getContractStartSummaryLabel(status),
+      value: formatDisplayDate(contractStartDate),
     });
   }
 
-  if (contractStartDate) {
-    const startLabel =
-      status === ServiceStatus.OBLIGATED
-        ? "Планова дата підписання"
-        : "Дата підписання контракту";
+  if (result) {
     rows.push({
-      label: startLabel,
-      value: formatDisplayDate(contractStartDate),
+      label: "Термін контракту",
+      value: result.contractTermMonths + " міс.",
+    });
+    rows.push({
+      label: "Контракт завершується",
+      value: formatDisplayDate(result.contractEndDate),
     });
   }
 
@@ -864,12 +865,15 @@ function collectInputSummaryRows() {
   return rows;
 }
 
-function renderInputSummary() {
+/**
+ * @param {ReturnType<typeof calculate> | null | undefined} result
+ */
+function renderInputSummary(result) {
   if (!wizardResultsInputsList) return;
 
   wizardResultsInputsList.replaceChildren();
 
-  collectInputSummaryRows().forEach(function (row) {
+  collectInputSummaryRows(result).forEach(function (row) {
     const wrap = document.createElement("div");
     wrap.className = "input-summary__row";
 
@@ -887,25 +891,49 @@ function renderInputSummary() {
   });
 }
 
-function appendExplanationSummaryRow(container, label, value) {
-  const row = document.createElement("div");
-  row.className = "explanation-line explanation-line--total explanation-line--summary-row";
+function renderTotalDeferral(result) {
+  if (!wizardResultsTotal) return;
 
-  const head = document.createElement("div");
-  head.className = "explanation-line__head";
+  wizardResultsTotal.replaceChildren();
 
-  const labelEl = document.createElement("p");
-  labelEl.className = "explanation-line__value";
-  labelEl.textContent = label;
+  const totalRow = document.createElement("div");
+  totalRow.className = "results-total";
 
-  const valueEl = document.createElement("p");
-  valueEl.className = "explanation-line__value";
-  valueEl.textContent = value;
+  const label = document.createElement("p");
+  label.className = "results-total__label";
+  label.textContent = "Загалом відстрочки:";
 
-  head.appendChild(labelEl);
-  head.appendChild(valueEl);
-  row.appendChild(head);
-  container.appendChild(row);
+  const value = document.createElement("p");
+  value.className = "results-total__value";
+  value.textContent = result.deferralDurationLabel;
+
+  totalRow.appendChild(label);
+  totalRow.appendChild(value);
+  wizardResultsTotal.appendChild(totalRow);
+
+  const periodRow = document.createElement("div");
+  periodRow.className = "results-period";
+
+  const periodLabel = document.createElement("p");
+  periodLabel.className = "results-period__label";
+  periodLabel.textContent = "Планований період відстрочки:";
+
+  const periodValue = document.createElement("p");
+  periodValue.className = "results-period__value";
+  periodValue.textContent =
+    formatDisplayDate(result.contractEndDate) +
+    " – " +
+    formatDisplayDate(result.deferralEndDate);
+
+  periodRow.appendChild(periodLabel);
+  periodRow.appendChild(periodValue);
+  wizardResultsTotal.appendChild(periodRow);
+}
+
+function getContractStartSummaryLabel(status) {
+  return status === ServiceStatus.OBLIGATED
+    ? "Планова дата підписання контракту"
+    : "Дата підписання контракту";
 }
 
 function renderExplanation(result, container) {
@@ -914,7 +942,7 @@ function renderExplanation(result, container) {
 
   target.replaceChildren();
 
-  result.explanation.forEach(function (line, index) {
+  result.explanation.forEach(function (line) {
     if (line.label === "Загалом відстрочки") {
       return;
     }
@@ -932,9 +960,13 @@ function renderExplanation(result, container) {
       row.classList.add("explanation-line--years-after");
     }
 
-    const label = document.createElement("p");
-    label.className = "explanation-line__label";
-    label.textContent = line.label + ":";
+    const main = document.createElement("p");
+    main.className = "explanation-line__main";
+    if (line.detail) {
+      main.textContent = line.label + " - " + line.detail;
+    } else {
+      main.textContent = line.label;
+    }
 
     const value = document.createElement("p");
     value.className = "explanation-line__value";
@@ -942,45 +974,19 @@ function renderExplanation(result, container) {
 
     const head = document.createElement("div");
     head.className = "explanation-line__head";
-    head.appendChild(label);
+    head.appendChild(main);
     head.appendChild(value);
     row.appendChild(head);
 
-    if (line.detail) {
-      const detail = document.createElement("p");
-      detail.className = "explanation-line__detail";
-      setTextWithResolutionLink(detail, line.detail);
-      row.appendChild(detail);
+    if (line.cite) {
+      const cite = document.createElement("p");
+      cite.className = "explanation-line__cite";
+      cite.textContent = "(" + line.cite + ")";
+      row.appendChild(cite);
     }
 
     target.appendChild(row);
   });
-
-  const ruleBefore = document.createElement("div");
-  ruleBefore.className = "explanation-line__rule";
-  ruleBefore.setAttribute("role", "presentation");
-  target.appendChild(ruleBefore);
-
-  appendExplanationSummaryRow(
-    target,
-    "Загалом відстрочки:",
-    result.deferralDurationLabel
-  );
-  appendExplanationSummaryRow(
-    target,
-    "Термін контракту:",
-    result.contractTermMonths + " міс."
-  );
-  appendExplanationSummaryRow(
-    target,
-    "Контракт завершується:",
-    formatDisplayDate(result.contractEndDate)
-  );
-  appendExplanationSummaryRow(
-    target,
-    "Відстрочка діє до:",
-    formatDisplayDate(result.deferralEndDate)
-  );
 }
 
 function isCombatExplanationLine(label) {
@@ -988,7 +994,8 @@ function isCombatExplanationLine(label) {
 }
 
 function showResults(result) {
-  renderInputSummary();
+  renderInputSummary(result);
+  renderTotalDeferral(result);
   renderExplanation(result, wizardResultsExplanation);
   showWizardResultsView();
 
@@ -1135,12 +1142,12 @@ if (wizardBack) {
   wizardBack.addEventListener("click", goToPreviousStep);
 }
 
-if (wizardEdit) {
-  wizardEdit.addEventListener("click", returnToWizard);
-}
-
 if (wizardRestart) {
   wizardRestart.addEventListener("click", resetWizard);
+}
+
+if (wizardEdit) {
+  wizardEdit.addEventListener("click", returnToWizard);
 }
 
 bindStepper("combat-days-input", "combat-days-dec", "combat-days-inc", 0);

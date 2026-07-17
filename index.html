@@ -363,6 +363,45 @@
                 aria-live="polite"
               >
                 <h2 class="wizard-results__title">Результат розрахунку відстрочки</h2>
+                <p class="wizard-results__intro">
+                  Розрахунок виконано відповідно до
+                  <a
+                    href="https://zakon.rada.gov.ua/laws/show/768-2026-%D0%BF#Text"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >постанови Кабінету Міністрів України №768 від 12 червня</a
+                  >.
+                </p>
+
+                <div class="results-card">
+                  <section class="deferral-results__explanation">
+                    <div class="deferral-results__subtitle-row">
+                      <h3 class="deferral-results__subtitle">Пояснення розрахунку</h3>
+                      <span class="deferral-results__subtitle-aside">Відстрочка</span>
+                    </div>
+                    <div class="deferral-results__rule" role="presentation"></div>
+                    <div id="wizard-results-explanation" class="deferral-explanation"></div>
+                    <div class="deferral-results__rule" role="presentation"></div>
+                    <div
+                      class="results-summary"
+                      id="wizard-results-total"
+                      aria-live="polite"
+                    ></div>
+                  </section>
+                </div>
+
+                <div class="wizard-results__cta">
+                  <a
+                    class="btn-next"
+                    id="wizard-compare"
+                    href="https://army.gov.ua/novi-kontrakty/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Порівняти контракти
+                  </a>
+                </div>
+
                 <section
                   class="wizard-results__inputs"
                   id="wizard-results-inputs"
@@ -370,27 +409,17 @@
                 >
                   <h3 class="wizard-results__inputs-title" id="wizard-results-inputs-title">
                     Ваші дані
+                    <button type="button" class="btn-text wizard-results__edit" id="wizard-edit">
+                      (редагувати)
+                    </button>
                   </h3>
                   <div class="deferral-results__rule" role="presentation"></div>
                   <dl class="input-summary" id="wizard-results-inputs-list"></dl>
-                  <div class="deferral-results__rule" role="presentation"></div>
-                  <div class="wizard-results__inputs-actions">
-                    <button type="button" class="btn-back" id="wizard-edit">
-                      Змінити дані
-                    </button>
-                  </div>
                 </section>
-                <section class="deferral-results__explanation">
-                  <div class="deferral-results__subtitle-row">
-                    <h3 class="deferral-results__subtitle">Пояснення розрахунку</h3>
-                    <span class="deferral-results__subtitle-aside">Відстрочка</span>
-                  </div>
-                  <div class="deferral-results__rule" role="presentation"></div>
-                  <div id="wizard-results-explanation" class="deferral-explanation"></div>
-                </section>
+
                 <nav class="wizard-results__nav" aria-label="Дії з результатом">
-                  <button type="button" class="btn-next" id="wizard-restart">
-                    Повернутись на початок розрахунку
+                  <button type="button" class="btn-back" id="wizard-restart">
+                    На початок обрахунку
                   </button>
                 </nav>
               </div>

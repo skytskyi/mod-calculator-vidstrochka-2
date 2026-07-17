@@ -88,6 +88,7 @@ const MAX_MONTHS_BEFORE_2022 = 480;
  * @typedef {Object} ExplanationLine
  * @property {string} label
  * @property {string} detail
+ * @property {string} [cite]
  * @property {string} contribution
  */
 
@@ -542,7 +543,8 @@ function buildExplanation({
   const explanation = [
     {
       label: getGuaranteedDeferralLabel(contractType),
-      detail: formatResolutionCite("абз. 2 п. 22"),
+      detail: "",
+      cite: "абз. 2 п. 22",
       contribution: formatMonthsLabel(BASE_DEFERRAL_MONTHS),
     },
   ];
@@ -550,9 +552,8 @@ function buildExplanation({
   if (combatMonths > 0) {
     explanation.push({
       label: getCombatExplanationLabel(combatUnitType, divisor),
-      detail: `${formatDaysLabel(combatDays)}, дільник ${divisor} (${formatResolutionCite(
-        divisor === 10 ? "абз. 3 п. 22" : "абз. 6 п. 22"
-      )})`,
+      detail: `${formatDaysLabel(combatDays)}, дільник ${divisor}`,
+      cite: divisor === 10 ? "абз. 3 п. 22" : "абз. 6 п. 22",
       contribution: formatMonthsLabel(combatMonths),
     });
   }
@@ -560,7 +561,8 @@ function buildExplanation({
   if (usesAfter2022) {
     explanation.push({
       label: "Повні місяці служби з 24.02.2022",
-      detail: `${formatMonthsLabel(monthsAfter2022)} (${formatResolutionCite("абз. 4 п. 22")})`,
+      detail: formatMonthsLabel(monthsAfter2022),
+      cite: "абз. 4 п. 22",
       contribution: formatMonthsLabel(after2022Contribution),
     });
   }
@@ -568,7 +570,8 @@ function buildExplanation({
   if (usesBefore2022) {
     explanation.push({
       label: "Повні місяці служби до 24.02.2022",
-      detail: `${formatMonthsLabel(monthsBefore2022)} (${formatResolutionCite("абз. 5 п. 22")})`,
+      detail: formatMonthsLabel(monthsBefore2022),
+      cite: "абз. 5 п. 22",
       contribution: formatMonthsLabel(before2022Contribution),
     });
   }
@@ -597,22 +600,32 @@ function getGuaranteedDeferralLabel(contractType) {
 }
 
 /**
+ * Label follows the user's combat-unit choice, not the effective divisor.
+ * For 10/14/24-month terms the divisor can be fixed by term, so it must stay
+ * in the detail line only — otherwise a COMBAT_UNIT + 24-month case would
+ * incorrectly read as "не у бойових частинах".
+ *
  * @param {CombatUnitType | string} [combatUnitType]
- * @param {number} [divisor]
+ * @param {number} [_divisor] Kept for call-site compatibility; unused for wording.
  * @returns {string}
  */
-function getCombatExplanationLabel(combatUnitType, divisor) {
-  const isCombatUnit =
-    combatUnitType === CombatUnitType.COMBAT_UNIT ||
-    combatUnitType === "FIRST_LINE" ||
-    combatUnitType === "COMBAT_UNIT";
-
-  if (divisor === 30) {
-    return "Відстрочка за участь у бойових діях (не у бойових частинах)";
+function getCombatExplanationLabel(combatUnitType, _divisor) {
+  if (!combatUnitType) {
+    return "Відстрочка за участь у бойових діях";
   }
 
-  if (divisor === 10 && isCombatUnit) {
-    return "Відстрочка за участь у бойових діях (у бойових частинах)";
+  try {
+    const normalized = normalizeCombatUnitType(combatUnitType);
+
+    if (normalized === CombatUnitType.COMBAT_UNIT) {
+      return "Відстрочка за участь у бойових діях (у бойових частинах)";
+    }
+
+    if (normalized === CombatUnitType.NON_COMBAT_UNIT) {
+      return "Відстрочка за участь у бойових діях (не у бойових частинах)";
+    }
+  } catch (_error) {
+    // Fall through to neutral wording for unexpected values.
   }
 
   return "Відстрочка за участь у бойових діях";
