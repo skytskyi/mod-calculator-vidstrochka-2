@@ -588,10 +588,12 @@ function collectServicePeriodOrderError() {
     const prev = sorted[i - 1];
     const curr = sorted[i];
     if (!prev.endDate || curr.startDate.getTime() < prev.endDate.getTime()) {
+      const startEl = curr.row.querySelector('[data-period-field="start"]');
       return {
         id: "field-service-periods",
         label: PERIODS_OVERLAP_ERROR,
-        focusSelector: "#" + (curr.row.querySelector('[data-period-field="start"]') || {}).id,
+        focusSelector:
+          startEl && startEl.id ? "#" + startEl.id : "#field-service-periods",
         kind: "date-order",
       };
     }
