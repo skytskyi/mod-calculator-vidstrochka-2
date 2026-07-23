@@ -662,7 +662,7 @@ function buildExplanation({
   if (combatMonths > 0) {
     explanation.push({
       label: getCombatExplanationLabel(combatUnitType, divisor),
-      detail: `${formatDaysLabel(combatDays)}, дільник ${divisor}`,
+      detail: formatDaysLabel(combatDays),
       cite: divisor === 10 ? "абз. 3 п. 22" : "абз. 6 п. 22",
       contribution: formatMonthsLabel(combatMonths),
     });
