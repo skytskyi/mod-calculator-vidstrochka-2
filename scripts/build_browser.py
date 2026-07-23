@@ -16,6 +16,7 @@ def build_calculator_browser() -> None:
     calc_src = calc_src.replace("export const WAR_START_DATE", "const WAR_START_DATE")
     calc_src = calc_src.replace("export const RESOLUTION_768_URL", "const RESOLUTION_768_URL")
     calc_src = calc_src.replace("export const RESOLUTION_768_CITE", "const RESOLUTION_768_CITE")
+    calc_src = calc_src.replace("export const MAX_SERVICE_PERIODS", "const MAX_SERVICE_PERIODS")
     calc_src = calc_src.replace("export function ", "function ")
 
     browser_calc = f"""(function (global) {{
@@ -48,6 +49,11 @@ def build_calculator_browser() -> None:
     differenceInFullMonths,
     calculateMonthsBefore2022,
     calculateMonthsAfter2022,
+    normalizeServicePeriods,
+    sumMonthsBefore2022,
+    sumMonthsAfter2022,
+    servicePeriodsOverlap,
+    MAX_SERVICE_PERIODS,
     calculateYearsBefore2022,
     calculateYearsAfter2022,
     calculateContractDuration,
@@ -82,7 +88,7 @@ def build_form_browser() -> None:
 
     browser_form = f"""(function () {{
   const {{ format }} = window.DateFnsLite;
-  const {{ ContractType, ServiceStatus, RESOLUTION_768_URL, RESOLUTION_768_CITE, calculate, getCombatExplanationLabels }} = window.DeferralCalculator;
+  const {{ ContractType, ServiceStatus, CombatUnitType, MAX_SERVICE_PERIODS, RESOLUTION_768_URL, RESOLUTION_768_CITE, calculate, getCombatExplanationLabels }} = window.DeferralCalculator;
 
 {form_src}
 }})();

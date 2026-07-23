@@ -609,7 +609,7 @@ body.mod-nav-open {
   margin: 0 auto;
   padding: 56px 24px 80px;
   display: grid;
-  gap: 32px;
+  gap: 0;
   grid-template-columns: 1fr;
 }
 
@@ -933,6 +933,19 @@ body.mod-nav-open {
   filter: brightness(0.97);
 }
 
+.stepper__btn:disabled {
+  border-color: #d1d1d1;
+  background: #d1d1d1;
+  color: #6b6b6b;
+  cursor: not-allowed;
+  filter: none;
+}
+
+.stepper__btn:disabled:hover,
+.stepper__btn:disabled:active {
+  filter: none;
+}
+
 .tariff-stepper__input-shell {
   flex: 1;
   min-width: 0;
@@ -1071,7 +1084,10 @@ body.mod-nav-open {
 }
 
 .btn-next:disabled {
-  opacity: 0.45;
+  border-color: #d1d1d1;
+  background: #d1d1d1;
+  color: #6b6b6b;
+  opacity: 1;
   cursor: not-allowed;
   filter: none;
 }
@@ -1244,8 +1260,8 @@ body.mod-nav-open {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-top: 28px;
-  padding-top: 24px;
+  margin-top: 48px;
+  padding-top: 0;
   border-top: none;
 }
 
@@ -1536,6 +1552,59 @@ body.mod-nav-open {
 .field--number {
   max-width: 100%;
   margin-bottom: 32px;
+}
+
+.service-periods[hidden] {
+  display: none !important;
+}
+
+.service-periods__list {
+  display: grid;
+  gap: 16px;
+}
+
+.service-period {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  background: #fafafa;
+}
+
+.service-period__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.service-period__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  color: var(--text-strong);
+}
+
+.service-period__fields {
+  display: grid;
+  gap: 12px;
+}
+
+.service-periods__add {
+  margin-top: 12px;
+}
+
+.service-period__remove[hidden] {
+  display: none !important;
+}
+
+@media (min-width: 640px) {
+  .service-period__fields {
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
 }
 
 .service-dates-row {

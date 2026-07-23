@@ -64,14 +64,24 @@ function formatResolutionCite(paragraphRef) {
 const BASE_DEFERRAL_MONTHS = 6;
 const MAX_MONTHS_BEFORE_2022 = 480;
 
+/** Максимальна кількість періодів служби в UI */
+const MAX_SERVICE_PERIODS = 5;
+
+/**
+ * @typedef {Object} ServicePeriod
+ * @property {Date} startDate
+ * @property {Date} [endDate] Absent/null = ongoing (active service)
+ */
+
 /**
  * @typedef {Object} CalculatorInput
  * @property {ContractType} contractType
  * @property {ServiceStatus} serviceStatus
- * @property {Date} [serviceStartDate]
- * @property {Date} [serviceEndDate]
+ * @property {ServicePeriod[]} [servicePeriods]
+ * @property {Date} [serviceStartDate] Legacy single-period start
+ * @property {Date} [serviceEndDate] Legacy single-period end
  * @property {Date} contractStartDate
- * @property {6 | 24} [contractTermChoice] Required for DISCHARGED + COMBAT/BASIC
+ * @property {6 | 24} [contractTermChoice] Deprecated — ignored; term is derived from status × type
  * @property {CombatUnitType | string} [combatUnitType]
  * @property {CombatUnitType | string} [combatAssignment] Legacy alias for combatUnitType
  * @property {number} [combatDays]
@@ -110,21 +120,14 @@ const MAX_MONTHS_BEFORE_2022 = 480;
 /**
  * @param {ServiceStatus} serviceStatus
  * @param {ContractType} contractType
- * @param {6 | 24} [termChoice]
+ * @param {6 | 24} [_termChoice] Deprecated — ignored
  * @returns {ContractTermMonths}
  */
-function resolveContractTermMonths(serviceStatus, contractType, termChoice) {
+function resolveContractTermMonths(serviceStatus, contractType, _termChoice) {
   if (contractType === ContractType.ASSAULT) {
     if (serviceStatus === ServiceStatus.OBLIGATED) return 14;
     if (serviceStatus === ServiceStatus.ACTIVE) return 10;
     return 6;
-  }
-
-  if (serviceStatus === ServiceStatus.DISCHARGED) {
-    if (termChoice !== 6 && termChoice !== 24) {
-      throw new Error("Оберіть термін контракту: від 6 або 24 місяці");
-    }
-    return termChoice;
   }
 
   return 24;
@@ -252,6 +255,102 @@ function calculateMonthsAfter2022(
   return differenceInFullMonths(periodEnd, periodStart);
 }
 
+/**
+ * @param {CalculatorInput | { servicePeriods?: ServicePeriod[], serviceStartDate?: Date, serviceEndDate?: Date }} input
+ * @returns {ServicePeriod[]}
+ */
+function normalizeServicePeriods(input) {
+  if (Array.isArray(input.servicePeriods) && input.servicePeriods.length > 0) {
+    return input.servicePeriods
+      .filter(function (period) {
+        return (
+          period &&
+          period.startDate instanceof Date &&
+          !Number.isNaN(period.startDate.getTime())
+        );
+      })
+      .map(function (period) {
+        const endDate =
+          period.endDate instanceof Date && !Number.isNaN(period.endDate.getTime())
+            ? period.endDate
+            : undefined;
+        return { startDate: period.startDate, endDate };
+      });
+  }
+
+  if (
+    input.serviceStartDate instanceof Date &&
+    !Number.isNaN(input.serviceStartDate.getTime())
+  ) {
+    const endDate =
+      input.serviceEndDate instanceof Date &&
+      !Number.isNaN(input.serviceEndDate.getTime())
+        ? input.serviceEndDate
+        : undefined;
+    return [{ startDate: input.serviceStartDate, endDate }];
+  }
+
+  return [];
+}
+
+/**
+ * @param {ServicePeriod[]} periods
+ * @returns {number}
+ */
+function sumMonthsBefore2022(periods) {
+  let total = 0;
+  periods.forEach(function (period) {
+    total += calculateMonthsBefore2022(period.startDate, period.endDate);
+  });
+  return Math.min(total, MAX_MONTHS_BEFORE_2022);
+}
+
+/**
+ * @param {ServicePeriod[]} periods
+ * @param {Date} contractStartDate
+ * @returns {number}
+ */
+function sumMonthsAfter2022(periods, contractStartDate) {
+  let total = 0;
+  periods.forEach(function (period) {
+    total += calculateMonthsAfter2022(
+      period.startDate,
+      contractStartDate,
+      period.endDate
+    );
+  });
+  return total;
+}
+
+/**
+ * @param {ServicePeriod[]} periods
+ * @returns {ServicePeriod[]}
+ */
+function sortServicePeriods(periods) {
+  return periods.slice().sort(function (a, b) {
+    return a.startDate.getTime() - b.startDate.getTime();
+  });
+}
+
+/**
+ * @param {ServicePeriod[]} periods
+ * @returns {boolean}
+ */
+function servicePeriodsOverlap(periods) {
+  const sorted = sortServicePeriods(periods);
+  for (let i = 1; i < sorted.length; i += 1) {
+    const prev = sorted[i - 1];
+    const curr = sorted[i];
+    if (!prev.endDate) {
+      return true;
+    }
+    if (curr.startDate.getTime() < prev.endDate.getTime()) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /** @deprecated Prefer calculateMonthsBefore2022 */
 function calculateYearsBefore2022(serviceStartDate, serviceEndDate) {
   return Math.floor(calculateMonthsBefore2022(serviceStartDate, serviceEndDate) / 12);
@@ -294,9 +393,12 @@ function calculateContractEndDate(contractStartDate, termMonths) {
 function calculate(input) {
   validateInput(input);
 
-  const combatUnitType = normalizeCombatUnitType(
-    input.combatUnitType ?? input.combatAssignment
-  );
+  const combatUnitType =
+    input.contractType === ContractType.ASSAULT
+      ? CombatUnitType.COMBAT_UNIT
+      : normalizeCombatUnitType(
+          input.combatUnitType ?? input.combatAssignment
+        );
   const termMonths = resolveContractTermMonths(
     input.serviceStatus,
     input.contractType,
@@ -307,34 +409,21 @@ function calculate(input) {
   const divisor = resolveCombatDivisor(termMonths, combatUnitType);
   const combatMonths = calculateCombatMonths(combatDays, divisor);
 
-  const serviceEndDate =
-    input.serviceStatus === ServiceStatus.DISCHARGED
-      ? input.serviceEndDate
-      : undefined;
-
-  const hasServiceStart =
-    input.serviceStartDate instanceof Date &&
-    !Number.isNaN(input.serviceStartDate.getTime());
+  const periods = normalizeServicePeriods(input);
+  const hasServicePeriods = periods.length > 0;
 
   let monthsBefore2022 = 0;
   let monthsAfter2022 = 0;
   let before2022Contribution = 0;
   let after2022Contribution = 0;
 
-  if (usesBefore2022 && hasServiceStart) {
-    monthsBefore2022 = calculateMonthsBefore2022(
-      input.serviceStartDate,
-      serviceEndDate
-    );
+  if (usesBefore2022 && hasServicePeriods) {
+    monthsBefore2022 = sumMonthsBefore2022(periods);
     before2022Contribution = calculateBefore2022Contribution(monthsBefore2022);
   }
 
-  if (usesAfter2022 && hasServiceStart) {
-    monthsAfter2022 = calculateMonthsAfter2022(
-      input.serviceStartDate,
-      input.contractStartDate,
-      serviceEndDate
-    );
+  if (usesAfter2022 && hasServicePeriods) {
+    monthsAfter2022 = sumMonthsAfter2022(periods, input.contractStartDate);
     after2022Contribution = calculateAfter2022Contribution(monthsAfter2022);
   }
 
@@ -363,8 +452,8 @@ function calculate(input) {
     monthsAfter2022,
     before2022Contribution,
     after2022Contribution,
-    usesBefore2022: usesBefore2022 && hasServiceStart,
-    usesAfter2022: usesAfter2022 && hasServiceStart,
+    usesBefore2022: usesBefore2022 && hasServicePeriods,
+    usesAfter2022: usesAfter2022 && hasServicePeriods,
     totalDeferralMonths,
   });
 
@@ -435,63 +524,86 @@ function validateInput(input) {
     throw new Error("Вкажіть дату підписання контракту");
   }
 
-  if (
-    input.serviceStatus === ServiceStatus.DISCHARGED &&
-    (input.contractType === ContractType.COMBAT ||
-      input.contractType === ContractType.BASIC) &&
-    input.contractTermChoice !== 6 &&
-    input.contractTermChoice !== 24
-  ) {
-    throw new Error("Оберіть термін контракту: від 6 або 24 місяці");
-  }
+  const periods = normalizeServicePeriods(input);
+  const requiresService =
+    input.serviceStatus === ServiceStatus.ACTIVE ||
+    input.serviceStatus === ServiceStatus.DISCHARGED;
 
-  if (input.serviceStatus !== ServiceStatus.OBLIGATED) {
-    if (!(input.serviceStartDate instanceof Date) || Number.isNaN(input.serviceStartDate.getTime())) {
+  if (requiresService) {
+    if (periods.length === 0) {
       throw new Error("Вкажіть дату початку військової служби");
     }
-  }
 
-  if (input.serviceStatus === ServiceStatus.DISCHARGED) {
-    if (!(input.serviceEndDate instanceof Date) || Number.isNaN(input.serviceEndDate.getTime())) {
-      throw new Error("Вкажіть дату звільнення з військової служби");
-    }
-
-    if (!isAfter(input.serviceEndDate, input.serviceStartDate)) {
+    if (periods.length > MAX_SERVICE_PERIODS) {
       throw new Error(
-        "Дата звільнення з військової служби має бути пізнішою за дату початку служби"
+        "Можна вказати не більше " + MAX_SERVICE_PERIODS + " періодів служби"
       );
     }
 
-    if (!isBefore(input.serviceEndDate, input.contractStartDate)) {
-      throw new Error(
-        "Дата звільнення з військової служби має бути ранішою за планову або фактичну дату підписання нового контракту"
-      );
+    periods.forEach(function (period, index) {
+      const isLast = index === periods.length - 1;
+      const needsEnd =
+        input.serviceStatus === ServiceStatus.DISCHARGED || !isLast;
+
+      if (needsEnd && !(period.endDate instanceof Date)) {
+        throw new Error("Вкажіть дату закінчення періоду служби");
+      }
+
+      if (period.endDate && !isAfter(period.endDate, period.startDate)) {
+        throw new Error(
+          "Дата закінчення періоду служби має бути пізнішою за дату початку"
+        );
+      }
+
+      if (isAfter(period.startDate, input.contractStartDate)) {
+        throw new Error(
+          "Дата початку військової служби не може бути пізнішою за планову або фактичну дату підписання нового контракту"
+        );
+      }
+
+      if (
+        period.endDate &&
+        !isBefore(period.endDate, input.contractStartDate)
+      ) {
+        throw new Error(
+          "Дата закінчення періоду служби має бути ранішою за планову або фактичну дату підписання нового контракту"
+        );
+      }
+    });
+
+    if (input.serviceStatus === ServiceStatus.ACTIVE) {
+      const openIndex = periods.findIndex(function (period) {
+        return !period.endDate;
+      });
+      if (openIndex !== -1 && openIndex !== periods.length - 1) {
+        throw new Error(
+          "Період без дати закінчення має бути останнім у списку"
+        );
+      }
     }
-  }
 
-  if (
-    input.serviceStatus !== ServiceStatus.OBLIGATED &&
-    isAfter(input.serviceStartDate, input.contractStartDate)
-  ) {
-    throw new Error(
-      "Дата початку військової служби не може бути пізнішою за планову або фактичну дату підписання нового контракту"
-    );
-  }
-
-  if (
-    input.serviceStatus === ServiceStatus.OBLIGATED &&
-    input.serviceStartDate instanceof Date &&
-    !Number.isNaN(input.serviceStartDate.getTime()) &&
-    isAfter(input.serviceStartDate, input.contractStartDate)
-  ) {
-    throw new Error(
-      "Дата початку військової служби не може бути пізнішою за планову або фактичну дату підписання нового контракту"
-    );
+    if (servicePeriodsOverlap(periods)) {
+      throw new Error("Періоди служби не повинні перетинатися");
+    }
+  } else if (periods.length > 0) {
+    periods.forEach(function (period) {
+      if (isAfter(period.startDate, input.contractStartDate)) {
+        throw new Error(
+          "Дата початку військової служби не може бути пізнішою за планову або фактичну дату підписання нового контракту"
+        );
+      }
+    });
   }
 
   const combatDays = input.combatDays ?? 0;
   if (!Number.isInteger(combatDays) || combatDays < 0) {
     throw new Error("Кількість днів бойових має бути цілим числом від 0");
+  }
+
+  if (combatDays > 480) {
+    throw new Error(
+      "Кількість днів участі в бойових діях не може перевищувати 480"
+    );
   }
 
   const combatUnitType = input.combatUnitType ?? input.combatAssignment;
@@ -732,6 +844,11 @@ function pluralUk(value, one, few, many) {
     differenceInFullMonths,
     calculateMonthsBefore2022,
     calculateMonthsAfter2022,
+    normalizeServicePeriods,
+    sumMonthsBefore2022,
+    sumMonthsAfter2022,
+    servicePeriodsOverlap,
+    MAX_SERVICE_PERIODS,
     calculateYearsBefore2022,
     calculateYearsAfter2022,
     calculateContractDuration,

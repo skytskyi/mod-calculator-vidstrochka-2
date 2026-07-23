@@ -1,9 +1,11 @@
 import { format } from "../vendor/dateFnsLite.esm.js";
 import {
+  CombatUnitType,
   ContractType,
   ServiceStatus,
   RESOLUTION_768_URL,
   RESOLUTION_768_CITE,
+  MAX_SERVICE_PERIODS,
   calculate,
   getCombatExplanationLabels,
 } from "./deferralCalculator.js";
@@ -16,15 +18,14 @@ const formActions = document.getElementById("form-actions-anchor");
 const combatDaysField = document.getElementById("field-combat-days");
 const combatAssignmentField = document.getElementById("field-combat-assignment");
 const combatDaysInput = document.getElementById("combat-days-input");
-const serviceStartField = document.getElementById("field-service-start");
-const serviceEndField = document.getElementById("field-service-end");
+const servicePeriodsField = document.getElementById("field-service-periods");
+const servicePeriodsList = document.getElementById("service-periods-list");
+const servicePeriodAddBtn = document.getElementById("service-period-add");
 const contractTermField = document.getElementById("field-contract-term");
 const contractStartLabel = document.getElementById("contract-start-label");
 const contractTermAssault = document.getElementById("contract-term-assault");
 const contractTermCombat = document.getElementById("contract-term-combat");
 const contractTermBasic = document.getElementById("contract-term-basic");
-const serviceStartInput = document.getElementById("service-start-date");
-const serviceEndInput = document.getElementById("service-end-date");
 
 const wizardProgress = document.getElementById("wizard-progress");
 const wizardQuestion = document.getElementById("wizard-question");
@@ -67,17 +68,17 @@ const STEP_META = {
   status: {
     title: "Ваш статус та дані про службу",
     help:
-      "Оберіть поточний статус. Якщо ви військовий або звільнений зі служби, вкажіть дати служби — вони потрібні для врахування стажу до та після 24 лютого 2022 року.",
+      "Оберіть поточний статус. Якщо ви військовий або звільнений зі служби, вкажіть один або кілька періодів служби (до 5). Вони потрібні для врахування стажу до та після 24 лютого 2022 року.",
   },
   contract: {
     title: "Дані про новий контракт",
-    help:
-      "Оберіть тип контракту та дату його підписання. Термін контракту залежить від статусу: для звільнених зі служби на бойовому або базовому контракті додатково оберіть «від 6» або «24 місяці».",
+    help: "Оберіть тип контракту та дату його підписання.",
   },
   combat: {
     title: "Участь у бойових діях під час нового контракту",
     help:
-      "Оберіть, чи будете виконувати завдання у бойових частинах, та вкажіть кількість днів участі. 0 означає відсутність участі. Це впливає на розрахунок відстрочки за абз. 3 або 6 п. 22 постанови №768.",
+      "Оберіть кількість днів участі в бойових діях (фактичну або прогнозовану). Це впливає на розрахунок відстрочки за абз. 3 або 6 п. 22 постанови №768.",
+    titleAssault: "Кількість днів участі в бойових діях",
   },
 };
 
@@ -89,11 +90,17 @@ const CONTRACT_START_LABELS = {
 const SERVICE_AFTER_CONTRACT_ERROR =
   "Дата початку військової служби не може бути пізнішою за планову або фактичну дату підписання нового контракту";
 
-const DISCHARGE_BEFORE_START_ERROR =
-  "Дата звільнення з військової служби має бути пізнішою за дату початку служби";
+const PERIOD_END_BEFORE_START_ERROR =
+  "Дата закінчення періоду служби має бути пізнішою за дату початку";
 
-const DISCHARGE_AFTER_CONTRACT_ERROR =
-  "Дата звільнення з військової служби має бути ранішою за планову або фактичну дату підписання нового контракту";
+const PERIOD_END_AFTER_CONTRACT_ERROR =
+  "Дата закінчення періоду служби має бути ранішою за планову або фактичну дату підписання нового контракту";
+
+const PERIODS_OVERLAP_ERROR = "Періоди служби не повинні перетинатися";
+
+const MAX_COMBAT_DAYS = 480;
+const COMBAT_DAYS_MAX_ERROR =
+  "Кількість днів участі в бойових діях не може перевищувати 480";
 
 const COMBAT_EXPLANATION_LABELS = getCombatExplanationLabels();
 
@@ -103,8 +110,12 @@ const summaryTitle = summary
 
 function parseDateInput(id) {
   const el = document.getElementById(id);
-  if (!el || !el.value) return null;
-  const [year, month, day] = el.value.split("-").map(Number);
+  return parseDateValue(el && el.value);
+}
+
+function parseDateValue(value) {
+  if (!value) return null;
+  const [year, month, day] = value.split("-").map(Number);
   return new Date(year, month - 1, day);
 }
 
@@ -115,6 +126,227 @@ function parseIntegerInput(id) {
   if (!value) return 0;
   const parsed = Number.parseInt(value, 10);
   return Number.isNaN(parsed) ? NaN : parsed;
+}
+
+function requiresServicePeriods(status) {
+  return status === ServiceStatus.ACTIVE || status === ServiceStatus.DISCHARGED;
+}
+
+function getServicePeriodRows() {
+  if (!servicePeriodsList) return [];
+  return Array.prototype.slice.call(
+    servicePeriodsList.querySelectorAll(".service-period")
+  );
+}
+
+/**
+ * @returns {{ startDate: Date, endDate?: Date }[]}
+ */
+function readServicePeriodsFromForm() {
+  return getServicePeriodRows()
+    .map(function (row) {
+      const startInput = row.querySelector('[data-period-field="start"]');
+      const endInput = row.querySelector('[data-period-field="end"]');
+      const startDate = parseDateValue(startInput && startInput.value);
+      const endDate = parseDateValue(endInput && endInput.value);
+      if (!startDate) return null;
+      /** @type {{ startDate: Date, endDate?: Date }} */
+      const period = { startDate };
+      if (endDate) period.endDate = endDate;
+      return period;
+    })
+    .filter(Boolean);
+}
+
+function periodNeedsEndDate(status, index, total) {
+  if (status === ServiceStatus.DISCHARGED) return true;
+  if (status === ServiceStatus.ACTIVE) return index < total - 1;
+  return false;
+}
+
+function createDateField(inputId, fieldName) {
+  const wrap = document.createElement("div");
+  wrap.className = "date-field";
+
+  const input = document.createElement("input");
+  input.id = inputId;
+  input.className = "date-input is-empty";
+  input.type = "date";
+  input.autocomplete = "off";
+  input.dataset.periodField = fieldName;
+  input.name =
+    fieldName === "start" ? "servicePeriodStart" : "servicePeriodEnd";
+
+  const placeholder = document.createElement("span");
+  placeholder.className = "date-field__placeholder";
+  placeholder.setAttribute("aria-hidden", "true");
+  placeholder.textContent = "дд.мм.рррр";
+
+  const trigger = document.createElement("button");
+  trigger.type = "button";
+  trigger.className = "date-field__trigger";
+  trigger.setAttribute("aria-label", "Відкрити календар");
+  trigger.innerHTML =
+    '<img src="Calendar.svg" alt="" width="24" height="24" />';
+
+  wrap.appendChild(input);
+  wrap.appendChild(placeholder);
+  wrap.appendChild(trigger);
+  bindDateField(wrap);
+  return wrap;
+}
+
+function createServicePeriodRow(index) {
+  const row = document.createElement("div");
+  row.className = "service-period";
+  row.dataset.periodIndex = String(index);
+
+  const head = document.createElement("div");
+  head.className = "service-period__head";
+
+  const title = document.createElement("p");
+  title.className = "service-period__title";
+  title.textContent = "Період служби " + (index + 1);
+
+  const removeBtn = document.createElement("button");
+  removeBtn.type = "button";
+  removeBtn.className = "btn-text service-period__remove";
+  removeBtn.textContent = "Видалити";
+  removeBtn.addEventListener("click", function () {
+    removeServicePeriod(row);
+  });
+
+  head.appendChild(title);
+  head.appendChild(removeBtn);
+
+  const startField = document.createElement("div");
+  startField.className = "field field--date";
+  const startLabel = document.createElement("label");
+  startLabel.className = "field__legend";
+  startLabel.htmlFor = "service-period-" + index + "-start";
+  startLabel.textContent = "Дата початку";
+  startField.appendChild(startLabel);
+  startField.appendChild(
+    createDateField("service-period-" + index + "-start", "start")
+  );
+
+  const endField = document.createElement("div");
+  endField.className = "field field--date service-period__end";
+  const endLabel = document.createElement("label");
+  endLabel.className = "field__legend";
+  endLabel.htmlFor = "service-period-" + index + "-end";
+  endLabel.textContent = "Дата закінчення";
+  endField.appendChild(endLabel);
+  endField.appendChild(
+    createDateField("service-period-" + index + "-end", "end")
+  );
+
+  const fields = document.createElement("div");
+  fields.className = "service-period__fields";
+  fields.appendChild(startField);
+  fields.appendChild(endField);
+
+  row.appendChild(head);
+  row.appendChild(fields);
+  return row;
+}
+
+function renumberServicePeriods() {
+  getServicePeriodRows().forEach(function (row, index) {
+    row.dataset.periodIndex = String(index);
+    const title = row.querySelector(".service-period__title");
+    if (title) title.textContent = "Період служби " + (index + 1);
+
+    const startInput = row.querySelector('[data-period-field="start"]');
+    const endInput = row.querySelector('[data-period-field="end"]');
+    const startLabel = row.querySelector(".field--date label");
+    const endLabel = row.querySelector(".service-period__end label");
+
+    if (startInput) {
+      startInput.id = "service-period-" + index + "-start";
+      if (startLabel) startLabel.htmlFor = startInput.id;
+    }
+    if (endInput) {
+      endInput.id = "service-period-" + index + "-end";
+      if (endLabel) endLabel.htmlFor = endInput.id;
+    }
+  });
+}
+
+function syncServicePeriodUi() {
+  const status = getSelectedServiceStatus();
+  const rows = getServicePeriodRows();
+  const total = rows.length;
+
+  rows.forEach(function (row, index) {
+    const removeBtn = row.querySelector(".service-period__remove");
+    const endField = row.querySelector(".service-period__end");
+    const endLabel = endField && endField.querySelector(".field__legend");
+    const needsEnd = periodNeedsEndDate(status, index, total);
+
+    if (removeBtn) {
+      removeBtn.hidden = total <= 1;
+    }
+
+    if (endField) {
+      endField.hidden = false;
+    }
+
+    if (endLabel) {
+      if (status === ServiceStatus.ACTIVE && index === total - 1) {
+        endLabel.textContent = "Дата закінчення (залиште порожньою, якщо служите зараз)";
+      } else if (status === ServiceStatus.DISCHARGED && index === total - 1) {
+        endLabel.textContent = "Дата звільнення / закінчення";
+      } else {
+        endLabel.textContent = "Дата закінчення";
+      }
+    }
+
+    if (!needsEnd && endField) {
+      // keep visible but optional for active last period
+      endField.hidden = false;
+    }
+  });
+
+  if (servicePeriodAddBtn) {
+    servicePeriodAddBtn.hidden = total >= MAX_SERVICE_PERIODS;
+    servicePeriodAddBtn.disabled = total >= MAX_SERVICE_PERIODS;
+  }
+}
+
+function addServicePeriod(options) {
+  if (!servicePeriodsList) return;
+  if (getServicePeriodRows().length >= MAX_SERVICE_PERIODS) return;
+
+  const silent = options && options.silent;
+  const index = getServicePeriodRows().length;
+  servicePeriodsList.appendChild(createServicePeriodRow(index));
+  syncServicePeriodUi();
+  if (!silent) {
+    onWizardInputChange();
+  }
+}
+
+function removeServicePeriod(row) {
+  if (!row || getServicePeriodRows().length <= 1) return;
+  row.remove();
+  renumberServicePeriods();
+  syncServicePeriodUi();
+  onWizardInputChange();
+}
+
+function clearServicePeriods() {
+  if (!servicePeriodsList) return;
+  servicePeriodsList.replaceChildren();
+}
+
+function ensureServicePeriods() {
+  if (!servicePeriodsList) return;
+  if (getServicePeriodRows().length === 0) {
+    addServicePeriod({ silent: true });
+  } else {
+    syncServicePeriodUi();
+  }
 }
 
 /**
@@ -164,18 +396,45 @@ function getSelectedCombatUnitType() {
   return selected ? selected.value : null;
 }
 
-function getSelectedContractTermChoice() {
-  const selected = document.querySelector('input[name="contractTermChoice"]:checked');
-  if (!selected) return null;
-  const value = Number.parseInt(selected.value, 10);
-  return value === 6 || value === 24 ? value : null;
+function showsCombatUnitChoice(type) {
+  return type === ContractType.COMBAT || type === ContractType.BASIC;
 }
 
-function requiresContractTermChoice(status, type) {
-  return (
-    status === ServiceStatus.DISCHARGED &&
-    (type === ContractType.COMBAT || type === ContractType.BASIC)
-  );
+/** @returns {string | null} */
+function getEffectiveCombatUnitType() {
+  const type = getSelectedContractType();
+  if (type === ContractType.ASSAULT) {
+    return CombatUnitType.COMBAT_UNIT;
+  }
+  return getSelectedCombatUnitType();
+}
+
+function clearCombatUnitSelection() {
+  document.querySelectorAll('input[name="combatUnitType"]').forEach(function (input) {
+    input.checked = false;
+  });
+}
+
+function getCombatStepMeta() {
+  const type = getSelectedContractType();
+  if (type === ContractType.ASSAULT) {
+    return {
+      title: STEP_META.combat.titleAssault,
+      help: STEP_META.combat.help,
+    };
+  }
+  return {
+    title: STEP_META.combat.title,
+    help: STEP_META.combat.help,
+  };
+}
+
+function getSelectedContractTermChoice() {
+  return null;
+}
+
+function requiresContractTermChoice(_status, _type) {
+  return false;
 }
 
 function clearContractTermChoice() {
@@ -191,7 +450,7 @@ function resetCombatDaysInput() {
 }
 
 function requiresServiceStartDate(status) {
-  return status === ServiceStatus.ACTIVE || status === ServiceStatus.DISCHARGED;
+  return requiresServicePeriods(status);
 }
 
 function requiresServiceEndDate(status) {
@@ -214,24 +473,17 @@ function syncContractTermLabels() {
   }
 
   if (contractTermCombat) {
-    contractTermCombat.textContent =
-      status === ServiceStatus.DISCHARGED
-        ? "Термін контракту — від 6 або 24 місяці"
-        : "Термін контракту — 24 місяці";
+    contractTermCombat.textContent = "Термін контракту — 24 місяці";
   }
 
   if (contractTermBasic) {
-    contractTermBasic.textContent =
-      status === ServiceStatus.DISCHARGED
-        ? "Термін контракту — від 6 або 24 місяці"
-        : "Термін контракту — 24 місяці";
+    contractTermBasic.textContent = "Термін контракту — 24 місяці";
   }
 }
 
 function syncStatusFields() {
   const status = getSelectedServiceStatus();
-  const showServiceStart = requiresServiceStartDate(status);
-  const showServiceEnd = requiresServiceEndDate(status);
+  const showPeriods = requiresServicePeriods(status);
 
   if (contractStartLabel) {
     contractStartLabel.textContent =
@@ -240,22 +492,14 @@ function syncStatusFields() {
         : CONTRACT_START_LABELS.other;
   }
 
-  if (serviceStartField) {
-    serviceStartField.hidden = !showServiceStart;
+  if (servicePeriodsField) {
+    servicePeriodsField.hidden = !showPeriods;
   }
 
-  if (serviceEndField) {
-    serviceEndField.hidden = !showServiceEnd;
-  }
-
-  if (!showServiceStart && serviceStartInput) {
-    serviceStartInput.value = "";
-    syncDateFieldState(serviceStartInput);
-  }
-
-  if (!showServiceEnd && serviceEndInput) {
-    serviceEndInput.value = "";
-    syncDateFieldState(serviceEndInput);
+  if (!showPeriods) {
+    clearServicePeriods();
+  } else {
+    ensureServicePeriods();
   }
 
   syncContractTermLabels();
@@ -277,8 +521,15 @@ function syncContractTermField() {
 }
 
 function syncCombatFields() {
+  const type = getSelectedContractType();
+  const showUnitChoice = showsCombatUnitChoice(type);
+
   if (combatAssignmentField) {
-    combatAssignmentField.hidden = false;
+    combatAssignmentField.hidden = !showUnitChoice;
+  }
+
+  if (!showUnitChoice) {
+    clearCombatUnitSelection();
   }
 
   if (combatDaysField) {
@@ -290,6 +541,74 @@ function getCurrentStepId() {
   return WIZARD_STEPS[currentStepIndex];
 }
 
+function areServicePeriodsFilled(status) {
+  const rows = getServicePeriodRows();
+  if (!rows.length) return false;
+
+  for (let i = 0; i < rows.length; i += 1) {
+    const row = rows[i];
+    const startInput = row.querySelector('[data-period-field="start"]');
+    const endInput = row.querySelector('[data-period-field="end"]');
+    const startDate = parseDateValue(startInput && startInput.value);
+    const endDate = parseDateValue(endInput && endInput.value);
+
+    if (!startDate) return false;
+    if (periodNeedsEndDate(status, i, rows.length) && !endDate) return false;
+  }
+
+  return true;
+}
+
+function collectServicePeriodOrderError() {
+  const status = getSelectedServiceStatus();
+  if (!requiresServicePeriods(status)) return null;
+
+  const rows = getServicePeriodRows();
+  /** @type {{ startDate: Date, endDate?: Date, row: Element, index: number }[]} */
+  const periods = [];
+
+  for (let i = 0; i < rows.length; i += 1) {
+    const row = rows[i];
+    const startInput = row.querySelector('[data-period-field="start"]');
+    const endInput = row.querySelector('[data-period-field="end"]');
+    const startDate = parseDateValue(startInput && startInput.value);
+    const endDate = parseDateValue(endInput && endInput.value);
+    if (!startDate) continue;
+
+    if (endDate && endDate.getTime() <= startDate.getTime()) {
+      return {
+        id: row.id || "field-service-periods",
+        label: PERIOD_END_BEFORE_START_ERROR,
+        focusSelector: "#" + (endInput && endInput.id),
+        kind: "date-order",
+      };
+    }
+
+    periods.push({ startDate, endDate: endDate || undefined, row, index: i });
+  }
+
+  const sorted = periods.slice().sort(function (a, b) {
+    return a.startDate.getTime() - b.startDate.getTime();
+  });
+
+  for (let i = 1; i < sorted.length; i += 1) {
+    const prev = sorted[i - 1];
+    const curr = sorted[i];
+    if (!prev.endDate || curr.startDate.getTime() < prev.endDate.getTime()) {
+      const startEl = curr.row.querySelector('[data-period-field="start"]');
+      return {
+        id: "field-service-periods",
+        label: PERIODS_OVERLAP_ERROR,
+        focusSelector:
+          startEl && startEl.id ? "#" + startEl.id : "#field-service-periods",
+        kind: "date-order",
+      };
+    }
+  }
+
+  return null;
+}
+
 function isStepFilled(stepId) {
   const status = getSelectedServiceStatus();
   const type = getSelectedContractType();
@@ -299,11 +618,8 @@ function isStepFilled(stepId) {
   switch (stepId) {
     case "status":
       if (!status) return false;
-      if (requiresServiceStartDate(status) && !parseDateInput("service-start-date")) {
-        return false;
-      }
-      if (requiresServiceEndDate(status) && !parseDateInput("service-end-date")) {
-        return false;
+      if (requiresServicePeriods(status)) {
+        return areServicePeriodsFilled(status);
       }
       return true;
     case "contract":
@@ -315,9 +631,15 @@ function isStepFilled(stepId) {
       }
       return true;
     case "combat": {
-      if (!combatUnitType) return false;
+      if (showsCombatUnitChoice(type) && !combatUnitType) {
+        return false;
+      }
       const combatDays = parseIntegerInput("combat-days-input");
-      return Number.isInteger(combatDays) && combatDays >= 0;
+      return (
+        Number.isInteger(combatDays) &&
+        combatDays >= 0 &&
+        combatDays <= MAX_COMBAT_DAYS
+      );
     }
     default:
       return false;
@@ -325,20 +647,21 @@ function isStepFilled(stepId) {
 }
 
 function validateCurrentStep(stepId) {
+  if (stepId === "combat") {
+    const combatDays = parseIntegerInput("combat-days-input");
+    if (Number.isInteger(combatDays) && combatDays > MAX_COMBAT_DAYS) {
+      return [COMBAT_DAYS_MAX_ERROR];
+    }
+  }
+
   if (!isStepFilled(stepId)) {
     return ["Заповніть усі поля на цьому кроці, щоб продовжити."];
   }
 
   if (stepId === "status") {
-    const serviceStartDate = parseDateInput("service-start-date");
-    const serviceEndDate = parseDateInput("service-end-date");
-
-    if (
-      serviceStartDate &&
-      serviceEndDate &&
-      serviceEndDate.getTime() <= serviceStartDate.getTime()
-    ) {
-      return [DISCHARGE_BEFORE_START_ERROR];
+    const periodError = collectServicePeriodOrderError();
+    if (periodError) {
+      return [periodError.label];
     }
   }
 
@@ -394,11 +717,18 @@ function renderWizardStep() {
   }
 
   if (wizardQuestion) {
-    wizardQuestion.textContent = STEP_META[stepId].title;
+    wizardQuestion.textContent =
+      stepId === "combat"
+        ? getCombatStepMeta().title
+        : STEP_META[stepId].title;
   }
 
   if (wizardHelp) {
-    setTextWithResolutionLink(wizardHelp, STEP_META[stepId].help);
+    const helpText =
+      stepId === "combat"
+        ? getCombatStepMeta().help
+        : STEP_META[stepId].help;
+    setTextWithResolutionLink(wizardHelp, helpText);
   }
 
   if (wizardBack) {
@@ -441,8 +771,19 @@ function onWizardInputChange() {
   syncStatusFields();
   syncContractTermField();
   syncCombatFields();
-  clearWizardError();
   clearStepInvalid();
+
+  if (getCurrentStepId() === "combat") {
+    const combatDays = parseIntegerInput("combat-days-input");
+    if (Number.isInteger(combatDays) && combatDays > MAX_COMBAT_DAYS) {
+      showWizardError(COMBAT_DAYS_MAX_ERROR);
+    } else {
+      clearWizardError();
+    }
+  } else {
+    clearWizardError();
+  }
+
   updateContinueButton();
 }
 
@@ -459,19 +800,11 @@ function collectMissing() {
     });
   }
 
-  if (requiresServiceStartDate(serviceStatus) && !parseDateInput("service-start-date")) {
+  if (requiresServicePeriods(serviceStatus) && !areServicePeriodsFilled(serviceStatus)) {
     missing.push({
-      id: "field-service-start",
-      label: "Дата початку військової служби",
-      focusSelector: "#service-start-date",
-    });
-  }
-
-  if (requiresServiceEndDate(serviceStatus) && !parseDateInput("service-end-date")) {
-    missing.push({
-      id: "field-service-end",
-      label: "Дата звільнення з військової служби",
-      focusSelector: "#service-end-date",
+      id: "field-service-periods",
+      label: "Періоди служби",
+      focusSelector: '[data-period-field="start"]',
     });
   }
 
@@ -502,7 +835,10 @@ function collectMissing() {
     });
   }
 
-  if (!getSelectedCombatUnitType()) {
+  if (
+    showsCombatUnitChoice(contractType) &&
+    !getSelectedCombatUnitType()
+  ) {
     missing.push({
       id: "field-combat-assignment",
       label: "Участь у бойових діях",
@@ -511,10 +847,17 @@ function collectMissing() {
   }
 
   const combatDays = parseIntegerInput("combat-days-input");
-  if (!Number.isInteger(combatDays) || combatDays < 0) {
+  if (
+    !Number.isInteger(combatDays) ||
+    combatDays < 0 ||
+    combatDays > MAX_COMBAT_DAYS
+  ) {
     missing.push({
       id: "field-combat-days",
-      label: "Кількість днів участі в бойових діях",
+      label:
+        Number.isInteger(combatDays) && combatDays > MAX_COMBAT_DAYS
+          ? COMBAT_DAYS_MAX_ERROR
+          : "Кількість днів участі в бойових діях",
       focusSelector: "#combat-days-input",
     });
   }
@@ -524,58 +867,50 @@ function collectMissing() {
 
 function collectDateOrderError() {
   const serviceStatus = getSelectedServiceStatus();
-  const serviceStartDate = parseDateInput("service-start-date");
-  const serviceEndDate = parseDateInput("service-end-date");
   const contractStartDate = parseDateInput("contract-start-date");
+  const periods = readServicePeriodsFromForm();
 
-  if (!requiresServiceStartDate(serviceStatus) && !serviceStartDate) {
+  if (!requiresServicePeriods(serviceStatus) && periods.length === 0) {
     return [];
   }
 
-  if (
-    serviceStartDate &&
-    contractStartDate &&
-    serviceStartDate.getTime() > contractStartDate.getTime()
-  ) {
-    return [
-      {
-        id: "field-service-start",
-        label: SERVICE_AFTER_CONTRACT_ERROR,
-        focusSelector: "#service-start-date",
-        invalidIds: ["field-service-start", "field-contract-start"],
-        kind: "date-order",
-      },
-    ];
+  const periodError = collectServicePeriodOrderError();
+  if (periodError) {
+    return [periodError];
   }
 
-  if (requiresServiceEndDate(serviceStatus)) {
-    if (
-      serviceStartDate &&
-      serviceEndDate &&
-      serviceEndDate.getTime() <= serviceStartDate.getTime()
-    ) {
+  if (!contractStartDate) {
+    return [];
+  }
+
+  for (let i = 0; i < periods.length; i += 1) {
+    const period = periods[i];
+    const row = getServicePeriodRows()[i];
+    const startInput = row && row.querySelector('[data-period-field="start"]');
+    const endInput = row && row.querySelector('[data-period-field="end"]');
+
+    if (period.startDate.getTime() > contractStartDate.getTime()) {
       return [
         {
-          id: "field-service-end",
-          label: DISCHARGE_BEFORE_START_ERROR,
-          focusSelector: "#service-end-date",
-          invalidIds: ["field-service-start", "field-service-end"],
+          id: "field-service-periods",
+          label: SERVICE_AFTER_CONTRACT_ERROR,
+          focusSelector: startInput ? "#" + startInput.id : "#field-service-periods",
+          invalidIds: ["field-service-periods", "field-contract-start"],
           kind: "date-order",
         },
       ];
     }
 
     if (
-      serviceEndDate &&
-      contractStartDate &&
-      serviceEndDate.getTime() >= contractStartDate.getTime()
+      period.endDate &&
+      period.endDate.getTime() >= contractStartDate.getTime()
     ) {
       return [
         {
-          id: "field-service-end",
-          label: DISCHARGE_AFTER_CONTRACT_ERROR,
-          focusSelector: "#service-end-date",
-          invalidIds: ["field-service-end", "field-contract-start"],
+          id: "field-service-periods",
+          label: PERIOD_END_AFTER_CONTRACT_ERROR,
+          focusSelector: endInput ? "#" + endInput.id : "#field-service-periods",
+          invalidIds: ["field-service-periods", "field-contract-start"],
           kind: "date-order",
         },
       ];
@@ -611,31 +946,34 @@ function openDatePicker(input) {
   input.focus();
 }
 
-function initDateFields() {
-  section.querySelectorAll(".date-field").forEach(function (field) {
-    const input = field.querySelector(".date-input");
-    const trigger = field.querySelector(".date-field__trigger");
-    if (!input) return;
+function bindDateField(field) {
+  const input = field.querySelector(".date-input");
+  const trigger = field.querySelector(".date-field__trigger");
+  if (!input || input.dataset.dateBound === "1") return;
 
+  input.dataset.dateBound = "1";
+  syncDateFieldState(input);
+  input.addEventListener("input", function () {
     syncDateFieldState(input);
-    input.addEventListener("input", function () {
-      syncDateFieldState(input);
-      onWizardInputChange();
-    });
-    input.addEventListener("change", function () {
-      syncDateFieldState(input);
-      onWizardInputChange();
-    });
-    input.addEventListener("click", function () {
+    onWizardInputChange();
+  });
+  input.addEventListener("change", function () {
+    syncDateFieldState(input);
+    onWizardInputChange();
+  });
+  input.addEventListener("click", function () {
+    openDatePicker(input);
+  });
+
+  if (trigger) {
+    trigger.addEventListener("click", function () {
       openDatePicker(input);
     });
+  }
+}
 
-    if (trigger) {
-      trigger.addEventListener("click", function () {
-        openDatePicker(input);
-      });
-    }
-  });
+function initDateFields() {
+  section.querySelectorAll(".date-field").forEach(bindDateField);
 }
 
 if (!section) {
@@ -721,6 +1059,7 @@ function clearWizardForm() {
     combatDaysInput.value = "0";
   }
 
+  clearServicePeriods();
   syncStatusFields();
   syncCombatFields();
 }
@@ -798,9 +1137,8 @@ function formatDisplayDate(date) {
 function collectInputSummaryRows(result) {
   const status = getSelectedServiceStatus();
   const type = getSelectedContractType();
-  const combatUnitType = getSelectedCombatUnitType();
-  const serviceStartDate = parseDateInput("service-start-date");
-  const serviceEndDate = parseDateInput("service-end-date");
+  const combatUnitType = getEffectiveCombatUnitType();
+  const servicePeriods = readServicePeriodsFromForm();
   const contractStartDate = parseDateInput("contract-start-date");
   const combatDays = parseIntegerInput("combat-days-input");
 
@@ -814,19 +1152,19 @@ function collectInputSummaryRows(result) {
     });
   }
 
-  if (serviceStartDate) {
+  servicePeriods.forEach(function (period, index) {
+    const label =
+      servicePeriods.length > 1
+        ? "Період служби " + (index + 1)
+        : "Період служби";
+    const endLabel = period.endDate
+      ? formatDisplayDate(period.endDate)
+      : "досі служить";
     rows.push({
-      label: "Дата початку служби",
-      value: formatDisplayDate(serviceStartDate),
+      label: label,
+      value: formatDisplayDate(period.startDate) + " – " + endLabel,
     });
-  }
-
-  if (serviceEndDate) {
-    rows.push({
-      label: "Дата звільнення",
-      value: formatDisplayDate(serviceEndDate),
-    });
-  }
+  });
 
   if (type) {
     rows.push({
@@ -1009,7 +1347,7 @@ function showResults(result) {
   }
 }
 
-function bindStepper(inputId, decId, incId, min) {
+function bindStepper(inputId, decId, incId, min, max) {
   const input = document.getElementById(inputId);
   const dec = document.getElementById(decId);
   const inc = document.getElementById(incId);
@@ -1021,40 +1359,59 @@ function bindStepper(inputId, decId, incId, min) {
     return Number.isNaN(parsed) ? min : parsed;
   }
 
+  function syncStepperButtons() {
+    const value = readValue();
+    dec.disabled = value <= min;
+    inc.disabled = value >= max;
+  }
+
   function writeValue(value) {
-    input.value = String(Math.max(min, value));
+    const next = Math.min(max, Math.max(min, value));
+    input.value = String(next);
+    syncStepperButtons();
     onWizardInputChange();
   }
 
   dec.addEventListener("click", function () {
+    if (dec.disabled) return;
     writeValue(readValue() - 1);
   });
 
   inc.addEventListener("click", function () {
+    if (inc.disabled) return;
     writeValue(readValue() + 1);
   });
 
-  input.addEventListener("input", onWizardInputChange);
+  input.addEventListener("input", function () {
+    syncStepperButtons();
+    onWizardInputChange();
+  });
+
+  input.addEventListener("change", function () {
+    const value = readValue();
+    if (value < min) {
+      input.value = String(min);
+    }
+    syncStepperButtons();
+    onWizardInputChange();
+  });
+
+  syncStepperButtons();
 }
 
 function buildInput() {
   const serviceStatus = getSelectedServiceStatus();
   const contractType = getSelectedContractType();
-  const serviceStartDate = parseDateInput("service-start-date");
-  const serviceEndDate = parseDateInput("service-end-date");
+  const servicePeriods = readServicePeriodsFromForm();
   const contractStartDate = parseDateInput("contract-start-date");
-  const combatUnitType = getSelectedCombatUnitType();
+  const combatUnitType = getEffectiveCombatUnitType();
   const termChoice = getSelectedContractTermChoice();
 
   if (!serviceStatus || !contractType || !contractStartDate || !combatUnitType) {
     return null;
   }
 
-  if (requiresServiceStartDate(serviceStatus) && !serviceStartDate) {
-    return null;
-  }
-
-  if (requiresServiceEndDate(serviceStatus) && !serviceEndDate) {
+  if (requiresServicePeriods(serviceStatus) && !areServicePeriodsFilled(serviceStatus)) {
     return null;
   }
 
@@ -1070,12 +1427,8 @@ function buildInput() {
     combatDays: parseIntegerInput("combat-days-input"),
   };
 
-  if (requiresServiceStartDate(serviceStatus) || serviceStartDate) {
-    input.serviceStartDate = serviceStartDate;
-  }
-
-  if (requiresServiceEndDate(serviceStatus)) {
-    input.serviceEndDate = serviceEndDate;
+  if (servicePeriods.length) {
+    input.servicePeriods = servicePeriods;
   }
 
   if (requiresContractTermChoice(serviceStatus, contractType)) {
@@ -1127,6 +1480,10 @@ section.addEventListener("change", function (e) {
     clearContractTermChoice();
     syncContractTermField();
     syncCombatFields();
+    if (getCurrentStepId() === "combat") {
+      renderWizardStep();
+      return;
+    }
   }
   if (e.target && e.target.name === "contractTermChoice") {
     syncContractTermField();
@@ -1155,7 +1512,13 @@ if (wizardEdit) {
   wizardEdit.addEventListener("click", returnToWizard);
 }
 
-bindStepper("combat-days-input", "combat-days-dec", "combat-days-inc", 0);
+if (servicePeriodAddBtn) {
+  servicePeriodAddBtn.addEventListener("click", function () {
+    addServicePeriod();
+  });
+}
+
+bindStepper("combat-days-input", "combat-days-dec", "combat-days-inc", 0, MAX_COMBAT_DAYS);
 syncStatusFields();
 syncCombatFields();
 initDateFields();

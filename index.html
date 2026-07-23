@@ -82,61 +82,21 @@
                       </fieldset>
 
                       <div
-                        class="field field--date wizard-step__section"
-                        id="field-service-start"
+                        class="service-periods wizard-step__section"
+                        id="field-service-periods"
                         hidden
                       >
-                        <label class="field__legend" for="service-start-date"
-                          >Дата початку військової служби</label
+                        <div
+                          class="service-periods__list"
+                          id="service-periods-list"
+                        ></div>
+                        <button
+                          type="button"
+                          class="btn-text service-periods__add"
+                          id="service-period-add"
                         >
-                        <div class="date-field">
-                          <input
-                            id="service-start-date"
-                            class="date-input is-empty"
-                            name="serviceStartDate"
-                            type="date"
-                            autocomplete="off"
-                          />
-                          <span class="date-field__placeholder" aria-hidden="true"
-                            >дд.мм.рррр</span
-                          >
-                          <button
-                            type="button"
-                            class="date-field__trigger"
-                            aria-label="Відкрити календар"
-                          >
-                            <img src="Calendar.svg" alt="" width="24" height="24" />
-                          </button>
-                        </div>
-                      </div>
-
-                      <div
-                        class="field field--date wizard-step__section"
-                        id="field-service-end"
-                        hidden
-                      >
-                        <label class="field__legend" for="service-end-date"
-                          >Дата звільнення з військової служби</label
-                        >
-                        <div class="date-field">
-                          <input
-                            id="service-end-date"
-                            class="date-input is-empty"
-                            name="serviceEndDate"
-                            type="date"
-                            autocomplete="off"
-                          />
-                          <span class="date-field__placeholder" aria-hidden="true"
-                            >дд.мм.рррр</span
-                          >
-                          <button
-                            type="button"
-                            class="date-field__trigger"
-                            aria-label="Відкрити календар"
-                          >
-                            <img src="Calendar.svg" alt="" width="24" height="24" />
-                          </button>
-                        </div>
+                          Додати період служби
+                        </button>
                       </div>
                     </div>
 
@@ -178,30 +138,6 @@
                               <span class="radio-card__term" id="contract-term-basic"
                                 >Термін контракту — 24 місяці</span
                               >
-                            </span>
-                          </label>
-                        </div>
-                      </fieldset>
-
-                      <fieldset
-                        class="field wizard-step__section"
-                        id="field-contract-term"
-                        hidden
-                      >
-                        <legend class="field__legend">Термін контракту</legend>
-                        <div class="radio-row radio-row--wizard">
-                          <label class="radio-card">
-                            <input type="radio" name="contractTermChoice" value="6" />
-                            <span class="radio-card__ui"></span>
-                            <span class="radio-card__content">
-                              <span class="radio-card__text">Від 6 місяців</span>
-                            </span>
-                          </label>
-                          <label class="radio-card">
-                            <input type="radio" name="contractTermChoice" value="24" />
-                            <span class="radio-card__ui"></span>
-                            <span class="radio-card__content">
-                              <span class="radio-card__text">24 місяці</span>
                             </span>
                           </label>
                         </div>
