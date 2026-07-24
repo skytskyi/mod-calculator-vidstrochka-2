@@ -234,20 +234,20 @@ function createServicePeriodRow(index) {
     createDateField("service-period-" + index + "-end", "end")
   );
 
-  const fields = document.createElement("div");
-  fields.className = "service-period__fields";
-  fields.appendChild(startField);
-  fields.appendChild(endField);
-
   const hint = document.createElement("p");
   hint.className = "field__hint service-period__hint";
   hint.hidden = true;
   hint.textContent =
     "Якщо служите зараз — залиште дату закінчення порожньою";
+  endField.appendChild(hint);
+
+  const fields = document.createElement("div");
+  fields.className = "service-period__fields";
+  fields.appendChild(startField);
+  fields.appendChild(endField);
 
   row.appendChild(head);
   row.appendChild(fields);
-  row.appendChild(hint);
   return row;
 }
 

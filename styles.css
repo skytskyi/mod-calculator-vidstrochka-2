@@ -1596,7 +1596,13 @@ body.mod-nav-open {
   gap: 12px;
 }
 
-.service-period__hint {
+.service-period__end {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.service-period__end .field__hint {
   margin: 0;
 }
 
