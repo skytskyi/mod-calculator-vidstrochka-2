@@ -1596,6 +1596,14 @@ body.mod-nav-open {
   gap: 12px;
 }
 
+.service-period__hint {
+  margin: 0;
+}
+
+.service-period__hint[hidden] {
+  display: none !important;
+}
+
 .service-periods__add {
   margin-top: 12px;
 }

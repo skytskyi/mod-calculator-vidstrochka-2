@@ -239,8 +239,15 @@ function createServicePeriodRow(index) {
   fields.appendChild(startField);
   fields.appendChild(endField);
 
+  const hint = document.createElement("p");
+  hint.className = "field__hint service-period__hint";
+  hint.hidden = true;
+  hint.textContent =
+    "Якщо служите зараз — залиште дату закінчення порожньою";
+
   row.appendChild(head);
   row.appendChild(fields);
+  row.appendChild(hint);
   return row;
 }
 
@@ -275,7 +282,9 @@ function syncServicePeriodUi() {
     const removeBtn = row.querySelector(".service-period__remove");
     const endField = row.querySelector(".service-period__end");
     const endLabel = endField && endField.querySelector(".field__legend");
-    const needsEnd = periodNeedsEndDate(status, index, total);
+    const hint = row.querySelector(".service-period__hint");
+    const isActiveLast =
+      status === ServiceStatus.ACTIVE && index === total - 1;
 
     if (removeBtn) {
       removeBtn.hidden = total <= 1;
@@ -286,18 +295,15 @@ function syncServicePeriodUi() {
     }
 
     if (endLabel) {
-      if (status === ServiceStatus.ACTIVE && index === total - 1) {
-        endLabel.textContent = "Дата закінчення (залиште порожньою, якщо служите зараз)";
-      } else if (status === ServiceStatus.DISCHARGED && index === total - 1) {
+      if (status === ServiceStatus.DISCHARGED && index === total - 1) {
         endLabel.textContent = "Дата звільнення / закінчення";
       } else {
         endLabel.textContent = "Дата закінчення";
       }
     }
 
-    if (!needsEnd && endField) {
-      // keep visible but optional for active last period
-      endField.hidden = false;
+    if (hint) {
+      hint.hidden = !isActiveLast;
     }
   });
 
