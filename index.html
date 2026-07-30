@@ -75,7 +75,9 @@
                             <input type="radio" name="serviceStatus" value="DISCHARGED" />
                             <span class="radio-card__ui"></span>
                             <span class="radio-card__content">
-                              <span class="radio-card__text">Звільнений зі служби</span>
+                              <span class="radio-card__text"
+                                >Військовозобов'язаний з досвідом бойових дій</span
+                              >
                             </span>
                           </label>
                         </div>
@@ -143,6 +145,30 @@
                         </div>
                       </fieldset>
 
+                      <fieldset
+                        class="field wizard-step__section"
+                        id="field-contract-term"
+                        hidden
+                      >
+                        <legend class="field__legend">Термін контракту</legend>
+                        <div class="radio-row radio-row--wizard">
+                          <label class="radio-card">
+                            <input type="radio" name="contractTermChoice" value="6" />
+                            <span class="radio-card__ui"></span>
+                            <span class="radio-card__content">
+                              <span class="radio-card__text">Від 6 місяців</span>
+                            </span>
+                          </label>
+                          <label class="radio-card">
+                            <input type="radio" name="contractTermChoice" value="24" />
+                            <span class="radio-card__ui"></span>
+                            <span class="radio-card__content">
+                              <span class="radio-card__text">24 місяці</span>
+                            </span>
+                          </label>
+                        </div>
+                      </fieldset>
+
                       <div class="field field--date wizard-step__section" id="field-contract-start">
                         <label
                           class="field__legend"
@@ -169,6 +195,10 @@
                             <img src="Calendar.svg" alt="" width="24" height="24" />
                           </button>
                         </div>
+                        <p class="field__hint" id="contract-start-hint">
+                          Необов'язково. Без дати система порахує лише строк відстрочки без
+                          календарних дат.
+                        </p>
                       </div>
                     </div>
 

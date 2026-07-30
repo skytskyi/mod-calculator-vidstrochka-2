@@ -7,6 +7,7 @@ import {
   RESOLUTION_768_CITE,
   MAX_SERVICE_PERIODS,
   calculate,
+  resolveContractTermMonths,
   getCombatExplanationLabels,
 } from "./deferralCalculator.js";
 
@@ -50,7 +51,7 @@ const WIZARD_STEPS = ["status", "contract", "combat"];
 const SERVICE_STATUS_LABELS = {
   OBLIGATED: "Військовозобов'язаний",
   ACTIVE: "Військовий",
-  DISCHARGED: "Звільнений зі служби",
+  DISCHARGED: "Військовозобов'язаний з досвідом бойових дій",
 };
 
 const CONTRACT_TYPE_LABELS = {
@@ -68,17 +69,21 @@ const STEP_META = {
   status: {
     title: "Ваш статус та дані про службу",
     help:
-      "Оберіть поточний статус. Якщо ви військовий або звільнений зі служби, вкажіть один або кілька періодів служби (до 5). Вони потрібні для врахування стажу до та після 24 лютого 2022 року.",
+      "Оберіть свій статус на момент укладення мотиваційного контракту. Якщо ви військовий або військовозобов'язаний з досвідом бойових дій, вкажіть один або кілька періодів служби (до 5).",
   },
   contract: {
     title: "Дані про новий контракт",
-    help: "Оберіть тип контракту та дату його підписання.",
+    help:
+      "Оберіть тип контракту та за потреби термін. Дату підписання можна не вказувати — тоді система порахує лише строк відстрочки.",
   },
   combat: {
     title: "Участь у бойових діях під час нового контракту",
     help:
-      "Оберіть кількість днів участі в бойових діях (фактичну або прогнозовану). Це впливає на розрахунок відстрочки за абз. 3 або 6 п. 22 постанови №768.",
-    titleAssault: "Кількість днів участі в бойових діях",
+      "Вкажіть загальну кількість днів безпосередньої участі у бойових діях лише за останній безперервний період проходження військової служби.",
+    titleWithUnit: "Участь у бойових діях під час нового контракту",
+    helpWithUnit:
+      "Оберіть тип військової частини та вкажіть кількість днів участі у бойових діях за останній безперервний період служби.",
+    titleDaysOnly: "Кількість днів участі в бойових діях",
   },
 };
 
@@ -402,15 +407,30 @@ function getSelectedCombatUnitType() {
   return selected ? selected.value : null;
 }
 
-function showsCombatUnitChoice(type) {
-  return type === ContractType.COMBAT || type === ContractType.BASIC;
+/** @returns {number | null} */
+function getResolvedTermMonths() {
+  const status = getSelectedServiceStatus();
+  const type = getSelectedContractType();
+  if (!status || !type) return null;
+  try {
+    return resolveContractTermMonths(
+      status,
+      type,
+      getSelectedContractTermChoice()
+    );
+  } catch (_error) {
+    return null;
+  }
+}
+
+function showsCombatUnitChoice() {
+  return getResolvedTermMonths() === 6;
 }
 
 /** @returns {string | null} */
 function getEffectiveCombatUnitType() {
-  const type = getSelectedContractType();
-  if (type === ContractType.ASSAULT) {
-    return CombatUnitType.COMBAT_UNIT;
+  if (!showsCombatUnitChoice()) {
+    return null;
   }
   return getSelectedCombatUnitType();
 }
@@ -422,25 +442,30 @@ function clearCombatUnitSelection() {
 }
 
 function getCombatStepMeta() {
-  const type = getSelectedContractType();
-  if (type === ContractType.ASSAULT) {
+  if (showsCombatUnitChoice()) {
     return {
-      title: STEP_META.combat.titleAssault,
-      help: STEP_META.combat.help,
+      title: STEP_META.combat.titleWithUnit,
+      help: STEP_META.combat.helpWithUnit,
     };
   }
   return {
-    title: STEP_META.combat.title,
+    title: STEP_META.combat.titleDaysOnly,
     help: STEP_META.combat.help,
   };
 }
 
 function getSelectedContractTermChoice() {
-  return null;
+  const selected = document.querySelector('input[name="contractTermChoice"]:checked');
+  if (!selected) return null;
+  const value = Number.parseInt(selected.value, 10);
+  return value === 6 || value === 24 ? value : null;
 }
 
-function requiresContractTermChoice(_status, _type) {
-  return false;
+function requiresContractTermChoice(status, type) {
+  return (
+    status === ServiceStatus.DISCHARGED &&
+    (type === ContractType.COMBAT || type === ContractType.BASIC)
+  );
 }
 
 function clearContractTermChoice() {
@@ -479,11 +504,17 @@ function syncContractTermLabels() {
   }
 
   if (contractTermCombat) {
-    contractTermCombat.textContent = "Термін контракту — 24 місяці";
+    contractTermCombat.textContent =
+      status === ServiceStatus.DISCHARGED
+        ? "Термін контракту — від 6 або 24 місяці"
+        : "Термін контракту — 24 місяці";
   }
 
   if (contractTermBasic) {
-    contractTermBasic.textContent = "Термін контракту — 24 місяці";
+    contractTermBasic.textContent =
+      status === ServiceStatus.DISCHARGED
+        ? "Термін контракту — від 6 або 24 місяці"
+        : "Термін контракту — 24 місяці";
   }
 }
 
@@ -527,8 +558,7 @@ function syncContractTermField() {
 }
 
 function syncCombatFields() {
-  const type = getSelectedContractType();
-  const showUnitChoice = showsCombatUnitChoice(type);
+  const showUnitChoice = showsCombatUnitChoice();
 
   if (combatAssignmentField) {
     combatAssignmentField.hidden = !showUnitChoice;
@@ -629,15 +659,13 @@ function isStepFilled(stepId) {
       }
       return true;
     case "contract":
-      if (!type || !parseDateInput("contract-start-date")) {
-        return false;
-      }
+      if (!type) return false;
       if (requiresContractTermChoice(status, type) && !termChoice) {
         return false;
       }
       return true;
     case "combat": {
-      if (showsCombatUnitChoice(type) && !combatUnitType) {
+      if (showsCombatUnitChoice() && !combatUnitType) {
         return false;
       }
       const combatDays = parseIntegerInput("combat-days-input");
@@ -833,16 +861,8 @@ function collectMissing() {
     });
   }
 
-  if (!parseDateInput("contract-start-date")) {
-    missing.push({
-      id: "field-contract-start",
-      label: "Дата підписання нового контракту",
-      focusSelector: "#contract-start-date",
-    });
-  }
-
   if (
-    showsCombatUnitChoice(contractType) &&
+    showsCombatUnitChoice() &&
     !getSelectedCombatUnitType()
   ) {
     missing.push({
@@ -1191,10 +1211,12 @@ function collectInputSummaryRows(result) {
       label: "Термін контракту",
       value: result.contractTermMonths + " міс.",
     });
-    rows.push({
-      label: "Контракт завершується",
-      value: formatDisplayDate(result.contractEndDate),
-    });
+    if (result.hasCalendarDates && result.contractEndDate) {
+      rows.push({
+        label: "Контракт завершується",
+        value: formatDisplayDate(result.contractEndDate),
+      });
+    }
   }
 
   if (combatUnitType) {
@@ -1250,7 +1272,7 @@ function renderTotalDeferral(result) {
 
   const label = document.createElement("p");
   label.className = "results-total__label";
-  label.textContent = "Загалом відстрочки:";
+  label.textContent = "Загальна відстрочка:";
 
   const value = document.createElement("p");
   value.className = "results-total__value";
@@ -1260,23 +1282,41 @@ function renderTotalDeferral(result) {
   totalRow.appendChild(value);
   wizardResultsTotal.appendChild(totalRow);
 
-  const periodRow = document.createElement("div");
-  periodRow.className = "results-period";
+  if (
+    result.hasCalendarDates &&
+    result.contractEndDate &&
+    result.deferralEndDate
+  ) {
+    const startRow = document.createElement("div");
+    startRow.className = "results-period";
 
-  const periodLabel = document.createElement("p");
-  periodLabel.className = "results-period__label";
-  periodLabel.textContent = "Планований період відстрочки:";
+    const startLabel = document.createElement("p");
+    startLabel.className = "results-period__label";
+    startLabel.textContent = "Дата початку відстрочки:";
 
-  const periodValue = document.createElement("p");
-  periodValue.className = "results-period__value";
-  periodValue.textContent =
-    formatDisplayDate(result.contractEndDate) +
-    " – " +
-    formatDisplayDate(result.deferralEndDate);
+    const startValue = document.createElement("p");
+    startValue.className = "results-period__value";
+    startValue.textContent = formatDisplayDate(result.contractEndDate);
 
-  periodRow.appendChild(periodLabel);
-  periodRow.appendChild(periodValue);
-  wizardResultsTotal.appendChild(periodRow);
+    startRow.appendChild(startLabel);
+    startRow.appendChild(startValue);
+    wizardResultsTotal.appendChild(startRow);
+
+    const endRow = document.createElement("div");
+    endRow.className = "results-period";
+
+    const endLabel = document.createElement("p");
+    endLabel.className = "results-period__label";
+    endLabel.textContent = "Дата завершення відстрочки:";
+
+    const endValue = document.createElement("p");
+    endValue.className = "results-period__value";
+    endValue.textContent = formatDisplayDate(result.deferralEndDate);
+
+    endRow.appendChild(endLabel);
+    endRow.appendChild(endValue);
+    wizardResultsTotal.appendChild(endRow);
+  }
 }
 
 function getContractStartSummaryLabel(status) {
@@ -1292,7 +1332,7 @@ function renderExplanation(result, container) {
   target.replaceChildren();
 
   result.explanation.forEach(function (line) {
-    if (line.label === "Загалом відстрочки") {
+    if (line.label === "Загальна відстрочка" || line.label === "Загалом відстрочки") {
       return;
     }
 
@@ -1413,7 +1453,7 @@ function buildInput() {
   const combatUnitType = getEffectiveCombatUnitType();
   const termChoice = getSelectedContractTermChoice();
 
-  if (!serviceStatus || !contractType || !contractStartDate || !combatUnitType) {
+  if (!serviceStatus || !contractType) {
     return null;
   }
 
@@ -1425,13 +1465,23 @@ function buildInput() {
     return null;
   }
 
+  if (showsCombatUnitChoice() && !combatUnitType) {
+    return null;
+  }
+
   const input = {
     serviceStatus,
     contractType,
-    contractStartDate,
-    combatUnitType,
     combatDays: parseIntegerInput("combat-days-input"),
   };
+
+  if (contractStartDate) {
+    input.contractStartDate = contractStartDate;
+  }
+
+  if (combatUnitType) {
+    input.combatUnitType = combatUnitType;
+  }
 
   if (servicePeriods.length) {
     input.servicePeriods = servicePeriods;
@@ -1493,6 +1543,11 @@ section.addEventListener("change", function (e) {
   }
   if (e.target && e.target.name === "contractTermChoice") {
     syncContractTermField();
+    syncCombatFields();
+    if (getCurrentStepId() === "combat") {
+      renderWizardStep();
+      return;
+    }
   }
   if (e.target && e.target.name === "combatUnitType") {
     syncCombatFields();

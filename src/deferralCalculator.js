@@ -79,7 +79,7 @@ export const MAX_SERVICE_PERIODS = 5;
  * @property {Date} [serviceStartDate] Legacy single-period start
  * @property {Date} [serviceEndDate] Legacy single-period end
  * @property {Date} contractStartDate
- * @property {6 | 24} [contractTermChoice] Deprecated — ignored; term is derived from status × type
+ * @property {6 | 24} [contractTermChoice] Required for DISCHARGED + COMBAT/BASIC
  * @property {CombatUnitType | string} [combatUnitType]
  * @property {CombatUnitType | string} [combatAssignment] Legacy alias for combatUnitType
  * @property {number} [combatDays]
@@ -102,9 +102,9 @@ export const MAX_SERVICE_PERIODS = 5;
 
 /**
  * @typedef {Object} CalculatorResult
- * @property {Date} contractEndDate
- * @property {DurationParts} deferralDuration
- * @property {Date} deferralEndDate
+ * @property {Date | null} contractEndDate
+ * @property {DurationParts | null} deferralDuration
+ * @property {Date | null} deferralEndDate
  * @property {number} contractTermMonths
  * @property {number} monthsBefore2022
  * @property {number} monthsAfter2022
@@ -113,19 +113,27 @@ export const MAX_SERVICE_PERIODS = 5;
  * @property {ExplanationLine[]} explanation
  * @property {string} deferralDurationLabel
  * @property {number} totalDeferralMonths
+ * @property {boolean} hasCalendarDates
  */
 
 /**
  * @param {ServiceStatus} serviceStatus
  * @param {ContractType} contractType
- * @param {6 | 24} [_termChoice] Deprecated — ignored
+ * @param {6 | 24} [termChoice]
  * @returns {ContractTermMonths}
  */
-export function resolveContractTermMonths(serviceStatus, contractType, _termChoice) {
+export function resolveContractTermMonths(serviceStatus, contractType, termChoice) {
   if (contractType === ContractType.ASSAULT) {
     if (serviceStatus === ServiceStatus.OBLIGATED) return 14;
     if (serviceStatus === ServiceStatus.ACTIVE) return 10;
     return 6;
+  }
+
+  if (serviceStatus === ServiceStatus.DISCHARGED) {
+    if (termChoice !== 6 && termChoice !== 24) {
+      throw new Error("Оберіть термін контракту: від 6 або 24 місяці");
+    }
+    return termChoice;
   }
 
   return 24;
@@ -391,16 +399,14 @@ export function calculateContractEndDate(contractStartDate, termMonths) {
 export function calculate(input) {
   validateInput(input);
 
-  const combatUnitType =
-    input.contractType === ContractType.ASSAULT
-      ? CombatUnitType.COMBAT_UNIT
-      : normalizeCombatUnitType(
-          input.combatUnitType ?? input.combatAssignment
-        );
   const termMonths = resolveContractTermMonths(
     input.serviceStatus,
     input.contractType,
     input.contractTermChoice
+  );
+  const combatUnitType = resolveCombatUnitTypeForTerm(
+    termMonths,
+    input.combatUnitType ?? input.combatAssignment
   );
   const { usesAfter2022, usesBefore2022 } = getServiceFieldFlags(termMonths);
   const combatDays = input.combatDays ?? 0;
@@ -409,6 +415,12 @@ export function calculate(input) {
 
   const periods = normalizeServicePeriods(input);
   const hasServicePeriods = periods.length > 0;
+  const hasContractStart =
+    input.contractStartDate instanceof Date &&
+    !Number.isNaN(input.contractStartDate.getTime());
+  const serviceAnchorDate = hasContractStart
+    ? input.contractStartDate
+    : new Date();
 
   let monthsBefore2022 = 0;
   let monthsAfter2022 = 0;
@@ -421,7 +433,7 @@ export function calculate(input) {
   }
 
   if (usesAfter2022 && hasServicePeriods) {
-    monthsAfter2022 = sumMonthsAfter2022(periods, input.contractStartDate);
+    monthsAfter2022 = sumMonthsAfter2022(periods, serviceAnchorDate);
     after2022Contribution = calculateAfter2022Contribution(monthsAfter2022);
   }
 
@@ -431,21 +443,29 @@ export function calculate(input) {
     after2022Contribution +
     before2022Contribution;
 
-  const contractEndDate = calculateContractEndDate(
-    input.contractStartDate,
-    termMonths
-  );
-  const deferralEndDate = addMonths(contractEndDate, totalDeferralMonths);
-  const deferralDuration = calculateDeferralDuration(
-    contractEndDate,
-    deferralEndDate
-  );
+  /** @type {Date | null} */
+  let contractEndDate = null;
+  /** @type {Date | null} */
+  let deferralEndDate = null;
+  /** @type {DurationParts | null} */
+  let deferralDuration = null;
+
+  if (hasContractStart) {
+    contractEndDate = calculateContractEndDate(
+      input.contractStartDate,
+      termMonths
+    );
+    deferralEndDate = addMonths(contractEndDate, totalDeferralMonths);
+    deferralDuration = calculateDeferralDuration(
+      contractEndDate,
+      deferralEndDate
+    );
+  }
+
   const explanation = buildExplanation({
-    contractType: input.contractType,
     combatDays,
     combatMonths,
     divisor,
-    combatUnitType,
     monthsBefore2022,
     monthsAfter2022,
     before2022Contribution,
@@ -465,9 +485,42 @@ export function calculate(input) {
     yearsBefore2022: Math.floor(monthsBefore2022 / 12),
     yearsAfter2022: Math.floor(monthsAfter2022 / 12),
     explanation,
-    deferralDurationLabel: formatDurationParts(deferralDuration),
+    deferralDurationLabel: formatMonthsLabel(totalDeferralMonths),
     totalDeferralMonths,
+    hasCalendarDates: hasContractStart,
   };
+}
+
+/**
+ * @param {ContractTermMonths} termMonths
+ * @param {CombatUnitType | string} [rawUnitType]
+ * @returns {CombatUnitType}
+ */
+function resolveCombatUnitTypeForTerm(termMonths, rawUnitType) {
+  if (termMonths === 6) {
+    return normalizeCombatUnitType(rawUnitType);
+  }
+
+  if (
+    rawUnitType === CombatUnitType.COMBAT_UNIT ||
+    rawUnitType === CombatUnitType.NON_COMBAT_UNIT ||
+    rawUnitType === "FIRST_LINE" ||
+    rawUnitType === "NOT_FIRST_LINE" ||
+    rawUnitType === "COMBAT_UNIT" ||
+    rawUnitType === "NON_COMBAT_UNIT" ||
+    rawUnitType === "NONE"
+  ) {
+    try {
+      return normalizeCombatUnitType(rawUnitType);
+    } catch (_error) {
+      // Fall through to term default.
+    }
+  }
+
+  // Matrix: unit type is N/A; divisor is fixed by term (10 for 10/14, 30 for 24).
+  return termMonths === 24
+    ? CombatUnitType.NON_COMBAT_UNIT
+    : CombatUnitType.COMBAT_UNIT;
 }
 
 /**
@@ -518,9 +571,15 @@ function validateInput(input) {
     throw new Error("Оберіть тип контракту");
   }
 
-  if (!(input.contractStartDate instanceof Date) || Number.isNaN(input.contractStartDate.getTime())) {
-    throw new Error("Вкажіть дату підписання контракту");
-  }
+  const hasContractStart =
+    input.contractStartDate instanceof Date &&
+    !Number.isNaN(input.contractStartDate.getTime());
+
+  const termMonths = resolveContractTermMonths(
+    input.serviceStatus,
+    input.contractType,
+    input.contractTermChoice
+  );
 
   const periods = normalizeServicePeriods(input);
   const requiresService =
@@ -553,13 +612,14 @@ function validateInput(input) {
         );
       }
 
-      if (isAfter(period.startDate, input.contractStartDate)) {
+      if (hasContractStart && isAfter(period.startDate, input.contractStartDate)) {
         throw new Error(
           "Дата початку військової служби не може бути пізнішою за планову або фактичну дату підписання нового контракту"
         );
       }
 
       if (
+        hasContractStart &&
         period.endDate &&
         !isBefore(period.endDate, input.contractStartDate)
       ) {
@@ -583,7 +643,7 @@ function validateInput(input) {
     if (servicePeriodsOverlap(periods)) {
       throw new Error("Періоди служби не повинні перетинатися");
     }
-  } else if (periods.length > 0) {
+  } else if (periods.length > 0 && hasContractStart) {
     periods.forEach(function (period) {
       if (isAfter(period.startDate, input.contractStartDate)) {
         throw new Error(
@@ -604,9 +664,8 @@ function validateInput(input) {
     );
   }
 
-  const combatUnitType = input.combatUnitType ?? input.combatAssignment;
-  if (!combatUnitType) {
-    throw new Error("Оберіть тип участі в бойових діях");
+  if (termMonths === 6) {
+    normalizeCombatUnitType(input.combatUnitType ?? input.combatAssignment);
   }
 }
 
@@ -636,11 +695,9 @@ function normalizeCombatUnitType(value) {
 }
 
 function buildExplanation({
-  contractType,
   combatDays,
   combatMonths,
   divisor,
-  combatUnitType,
   monthsBefore2022,
   monthsAfter2022,
   before2022Contribution,
@@ -652,42 +709,49 @@ function buildExplanation({
   /** @type {ExplanationLine[]} */
   const explanation = [
     {
-      label: getGuaranteedDeferralLabel(contractType),
+      label: "Гарантована відстрочка",
       detail: "",
       cite: "абз. 2 п. 22",
-      contribution: formatMonthsLabel(BASE_DEFERRAL_MONTHS),
+      contribution: formatSignedMonths(BASE_DEFERRAL_MONTHS),
     },
   ];
 
   if (combatMonths > 0) {
     explanation.push({
-      label: getCombatExplanationLabel(combatUnitType, divisor),
-      detail: formatDaysLabel(combatDays),
+      label: getCombatExplanationLabel(undefined, divisor),
+      detail: "",
       cite: divisor === 10 ? "абз. 3 п. 22" : "абз. 6 п. 22",
-      contribution: formatMonthsLabel(combatMonths),
+      contribution:
+        formatSignedMonths(combatMonths) + " — " + formatDaysLabel(combatDays),
     });
   }
 
   if (usesAfter2022) {
     explanation.push({
-      label: "Повні місяці служби з 24.02.2022",
-      detail: formatMonthsLabel(monthsAfter2022),
+      label: "Служба після 24.02.2022",
+      detail: "",
       cite: "абз. 4 п. 22",
-      contribution: formatMonthsLabel(after2022Contribution),
+      contribution:
+        formatSignedMonths(after2022Contribution) +
+        " — " +
+        formatMonthsLabel(monthsAfter2022),
     });
   }
 
   if (usesBefore2022) {
     explanation.push({
-      label: "Повні місяці служби до 24.02.2022",
-      detail: formatMonthsLabel(monthsBefore2022),
+      label: "Служба до 24.02.2022",
+      detail: "",
       cite: "абз. 5 п. 22",
-      contribution: formatMonthsLabel(before2022Contribution),
+      contribution:
+        formatSignedMonths(before2022Contribution) +
+        " — " +
+        formatMonthsLabel(monthsBefore2022),
     });
   }
 
   explanation.push({
-    label: "Загалом відстрочки",
+    label: "Загальна відстрочка",
     detail: "",
     contribution: formatMonthsLabel(totalDeferralMonths),
   });
@@ -696,49 +760,30 @@ function buildExplanation({
 }
 
 /**
- * @param {ContractType} contractType
+ * @param {ContractType} [_contractType]
  * @returns {string}
  */
-export function getGuaranteedDeferralLabel(contractType) {
-  const labels = {
-    [ContractType.ASSAULT]: "піхотно-штурмового контракту",
-    [ContractType.COMBAT]: "бойового контракту",
-    [ContractType.BASIC]: "базового контракту",
-  };
-  const typeName = labels[contractType] ?? contractType;
-  return `Гарантована відстрочка за підписання ${typeName}`;
+export function getGuaranteedDeferralLabel(_contractType) {
+  return "Гарантована відстрочка";
 }
 
 /**
- * Label follows the user's combat-unit choice, not the effective divisor.
- * For 10/14/24-month terms the divisor can be fixed by term, so it must stay
- * in the detail line only — otherwise a COMBAT_UNIT + 24-month case would
- * incorrectly read as "не у бойових частинах".
+ * Label follows the matrix divisor rule (10 vs 30 days).
  *
- * @param {CombatUnitType | string} [combatUnitType]
- * @param {number} [_divisor] Kept for call-site compatibility; unused for wording.
+ * @param {CombatUnitType | string} [_combatUnitType]
+ * @param {number} [divisor]
  * @returns {string}
  */
-export function getCombatExplanationLabel(combatUnitType, _divisor) {
-  if (!combatUnitType) {
-    return "Відстрочка за участь у бойових діях";
+export function getCombatExplanationLabel(_combatUnitType, divisor) {
+  if (divisor === 30) {
+    return "За участь у бойових діях (небойові частини)";
   }
 
-  try {
-    const normalized = normalizeCombatUnitType(combatUnitType);
-
-    if (normalized === CombatUnitType.COMBAT_UNIT) {
-      return "Відстрочка за участь у бойових діях (у бойових частинах)";
-    }
-
-    if (normalized === CombatUnitType.NON_COMBAT_UNIT) {
-      return "Відстрочка за участь у бойових діях (не у бойових частинах)";
-    }
-  } catch (_error) {
-    // Fall through to neutral wording for unexpected values.
+  if (divisor === 10) {
+    return "За участь у бойових діях (бойові частини)";
   }
 
-  return "Відстрочка за участь у бойових діях";
+  return "За участь у бойових діях";
 }
 
 /**
@@ -754,12 +799,12 @@ export function getCombatAssignmentExplanationLabel(combatAssignment) {
  */
 export function getCombatExplanationLabels() {
   return [
+    "За участь у бойових діях",
+    "За участь у бойових діях (бойові частини)",
+    "За участь у бойових діях (небойові частини)",
     "Відстрочка за участь у бойових діях",
     "Відстрочка за участь у бойових діях (у бойових частинах)",
     "Відстрочка за участь у бойових діях (не у бойових частинах)",
-    "Відстрочка за бойові дії",
-    "Відстрочка за бойові дії на першій лінії",
-    "Відстрочка за бойові дії не на першій лінії",
   ];
 }
 
@@ -797,6 +842,10 @@ export function formatDurationParts(parts) {
 
 function formatMonthsLabel(months) {
   return `${months} ${monthsWord(months)}`;
+}
+
+function formatSignedMonths(months) {
+  return `+${formatMonthsLabel(months)}`;
 }
 
 function formatDaysLabel(days) {

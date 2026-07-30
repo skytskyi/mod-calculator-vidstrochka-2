@@ -27,13 +27,19 @@ describe("resolveContractTermMonths", () => {
     ).toBe(6);
   });
 
-  it("uses fixed 24 months for combat/basic including discharged", () => {
+  it("requires term choice for discharged combat/basic", () => {
     expect(
+      resolveContractTermMonths(ServiceStatus.DISCHARGED, ContractType.COMBAT, 6)
+    ).toBe(6);
+    expect(
+      resolveContractTermMonths(ServiceStatus.DISCHARGED, ContractType.BASIC, 24)
+    ).toBe(24);
+    expect(() =>
       resolveContractTermMonths(ServiceStatus.DISCHARGED, ContractType.COMBAT)
-    ).toBe(24);
-    expect(
-      resolveContractTermMonths(ServiceStatus.DISCHARGED, ContractType.BASIC)
-    ).toBe(24);
+    ).toThrow("Оберіть термін контракту");
+  });
+
+  it("uses fixed 24 months for obligated/active combat/basic", () => {
     expect(
       resolveContractTermMonths(ServiceStatus.ACTIVE, ContractType.COMBAT)
     ).toBe(24);
@@ -103,13 +109,13 @@ describe("test vectors V1–V7", () => {
       contractType: ContractType.ASSAULT,
       serviceStartDate: new Date(2017, 8, 1),
       contractStartDate: new Date(2024, 2, 1),
-      combatUnitType: CombatUnitType.COMBAT_UNIT,
       combatDays: 30,
     });
 
     expect(result.contractTermMonths).toBe(10);
     expect(result.totalDeferralMonths).toBe(32);
-    expect(result.deferralDurationLabel).toBe("2 роки 8 місяців");
+    expect(result.deferralDurationLabel).toBe("32 місяці");
+    expect(result.hasCalendarDates).toBe(true);
   });
 
   it("V2: obligated + assault, 7 combat days → 7 months", () => {
@@ -117,7 +123,6 @@ describe("test vectors V1–V7", () => {
       serviceStatus: ServiceStatus.OBLIGATED,
       contractType: ContractType.ASSAULT,
       contractStartDate: new Date(2026, 8, 1),
-      combatUnitType: CombatUnitType.COMBAT_UNIT,
       combatDays: 7,
     });
 
@@ -142,16 +147,19 @@ describe("test vectors V1–V7", () => {
     expect(result.deferralDurationLabel).toBe("8 місяців");
   });
 
-  it("V4: obligated + basic not in combat units → 7 months", () => {
+  it("V4: discharged + combat from 6 months not in combat units → 7 months", () => {
     const result = calculate({
-      serviceStatus: ServiceStatus.OBLIGATED,
-      contractType: ContractType.BASIC,
+      serviceStatus: ServiceStatus.DISCHARGED,
+      contractType: ContractType.COMBAT,
+      contractTermChoice: 6,
+      serviceStartDate: new Date(2020, 0, 1),
+      serviceEndDate: new Date(2025, 0, 1),
       contractStartDate: new Date(2026, 8, 1),
       combatUnitType: CombatUnitType.NON_COMBAT_UNIT,
       combatDays: 15,
     });
 
-    expect(result.contractTermMonths).toBe(24);
+    expect(result.contractTermMonths).toBe(6);
     expect(result.totalDeferralMonths).toBe(7);
     expect(result.deferralDurationLabel).toBe("7 місяців");
   });
@@ -162,13 +170,12 @@ describe("test vectors V1–V7", () => {
       contractType: ContractType.COMBAT,
       serviceStartDate: new Date(2010, 7, 1),
       contractStartDate: new Date(2026, 8, 1),
-      combatUnitType: CombatUnitType.COMBAT_UNIT,
       combatDays: 61,
     });
 
     expect(result.contractTermMonths).toBe(24);
     expect(result.totalDeferralMonths).toBe(21);
-    expect(result.deferralDurationLabel).toBe("1 рік 9 місяців");
+    expect(result.deferralDurationLabel).toBe("21 місяць");
   });
 
   it("V6: discharged + assault ignores service before 2022", () => {
@@ -193,7 +200,6 @@ describe("test vectors V1–V7", () => {
       serviceStatus: ServiceStatus.OBLIGATED,
       contractType: ContractType.BASIC,
       contractStartDate: new Date(2026, 8, 1),
-      combatUnitType: CombatUnitType.NON_COMBAT_UNIT,
       combatDays: 0,
     });
 
@@ -203,7 +209,7 @@ describe("test vectors V1–V7", () => {
   });
 });
 
-describe("validation", () => {
+describe("validation and optional contract date", () => {
   it("rejects missing period end for discharged status", () => {
     expect(() =>
       calculate({
@@ -217,19 +223,30 @@ describe("validation", () => {
     ).toThrow("Вкажіть дату закінчення періоду служби");
   });
 
-  it("does not require term choice for discharged combat", () => {
+  it("allows calculation without contract start date", () => {
     const result = calculate({
-      serviceStatus: ServiceStatus.DISCHARGED,
-      contractType: ContractType.COMBAT,
-      serviceStartDate: new Date(2020, 3, 15),
-      serviceEndDate: new Date(2025, 0, 1),
-      contractStartDate: new Date(2026, 8, 1),
-      combatUnitType: CombatUnitType.COMBAT_UNIT,
+      serviceStatus: ServiceStatus.OBLIGATED,
+      contractType: ContractType.ASSAULT,
       combatDays: 0,
     });
 
-    expect(result.contractTermMonths).toBe(24);
-    expect(result.totalDeferralMonths).toBeGreaterThanOrEqual(6);
+    expect(result.totalDeferralMonths).toBe(6);
+    expect(result.hasCalendarDates).toBe(false);
+    expect(result.contractEndDate).toBeNull();
+    expect(result.deferralEndDate).toBeNull();
+  });
+
+  it("requires unit type for 6-month term", () => {
+    expect(() =>
+      calculate({
+        serviceStatus: ServiceStatus.DISCHARGED,
+        contractType: ContractType.ASSAULT,
+        serviceStartDate: new Date(2020, 3, 15),
+        serviceEndDate: new Date(2025, 0, 1),
+        contractStartDate: new Date(2026, 8, 1),
+        combatDays: 10,
+      })
+    ).toThrow("Оберіть тип участі в бойових діях");
   });
 });
 
@@ -248,11 +265,9 @@ describe("multiple service periods", () => {
         },
       ],
       contractStartDate: new Date(2024, 5, 1),
-      combatUnitType: CombatUnitType.COMBAT_UNIT,
       combatDays: 0,
     });
 
-    // Before 2022 comes only from 2014–2019; after-2022 is unused for 24-month term.
     expect(result.contractTermMonths).toBe(24);
     expect(result.monthsBefore2022).toBe(71);
     expect(result.totalDeferralMonths).toBe(6 + Math.floor(71 / 12) + 1);
@@ -263,6 +278,7 @@ describe("multiple service periods", () => {
       calculate({
         serviceStatus: ServiceStatus.DISCHARGED,
         contractType: ContractType.BASIC,
+        contractTermChoice: 24,
         servicePeriods: [
           {
             startDate: new Date(2018, 0, 1),
@@ -274,9 +290,26 @@ describe("multiple service periods", () => {
           },
         ],
         contractStartDate: new Date(2026, 8, 1),
-        combatUnitType: CombatUnitType.NON_COMBAT_UNIT,
         combatDays: 0,
       })
     ).toThrow("Періоди служби не повинні перетинатися");
+  });
+});
+
+describe("TO-BE explanation format", () => {
+  it("formats combat contribution as signed months and days", () => {
+    const result = calculate({
+      serviceStatus: ServiceStatus.OBLIGATED,
+      contractType: ContractType.ASSAULT,
+      contractStartDate: new Date(2026, 8, 1),
+      combatDays: 7,
+    });
+
+    const combatLine = result.explanation.find(function (line) {
+      return line.label.indexOf("бойові частини") !== -1;
+    });
+
+    expect(combatLine).toBeTruthy();
+    expect(combatLine.contribution).toBe("+1 місяць — 7 днів");
   });
 });
