@@ -241,8 +241,7 @@ function createServicePeriodRow(index) {
   const hint = document.createElement("p");
   hint.className = "field__hint service-period__hint";
   hint.hidden = true;
-  hint.textContent =
-    "Якщо служите зараз — залиште дату закінчення порожньою";
+  hint.textContent = "Залиште порожнім, якщо служите";
   endField.appendChild(hint);
 
   const fields = document.createElement("div");
