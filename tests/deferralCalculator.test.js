@@ -297,7 +297,7 @@ describe("multiple service periods", () => {
 });
 
 describe("TO-BE explanation format", () => {
-  it("formats combat contribution as signed months and days", () => {
+  it("puts user inputs in detail and only deferral months in contribution", () => {
     const result = calculate({
       serviceStatus: ServiceStatus.OBLIGATED,
       contractType: ContractType.ASSAULT,
@@ -305,11 +305,19 @@ describe("TO-BE explanation format", () => {
       combatDays: 7,
     });
 
+    const guaranteed = result.explanation.find(function (line) {
+      return line.label === "Гарантована відстрочка";
+    });
     const combatLine = result.explanation.find(function (line) {
       return line.label.indexOf("бойові частини") !== -1;
     });
 
+    expect(guaranteed).toBeTruthy();
+    expect(guaranteed.contribution).toBe("6 місяців");
+    expect(guaranteed.detail).toBe("");
+
     expect(combatLine).toBeTruthy();
-    expect(combatLine.contribution).toBe("+1 місяць — 7 днів");
+    expect(combatLine.contribution).toBe("+1 місяць");
+    expect(combatLine.detail).toBe("7 днів");
   });
 });

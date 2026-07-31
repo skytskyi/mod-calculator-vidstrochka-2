@@ -1274,40 +1274,32 @@ function renderTotalDeferral(result) {
   wizardResultsTotal.appendChild(totalRow);
 
   if (
-    result.hasCalendarDates &&
-    result.contractEndDate &&
-    result.deferralEndDate
+    !(
+      result.hasCalendarDates &&
+      result.contractEndDate &&
+      result.deferralEndDate
+    )
   ) {
-    const startRow = document.createElement("div");
-    startRow.className = "results-period";
-
-    const startLabel = document.createElement("p");
-    startLabel.className = "results-period__label";
-    startLabel.textContent = "Дата початку відстрочки:";
-
-    const startValue = document.createElement("p");
-    startValue.className = "results-period__value";
-    startValue.textContent = formatDisplayDate(result.contractEndDate);
-
-    startRow.appendChild(startLabel);
-    startRow.appendChild(startValue);
-    wizardResultsTotal.appendChild(startRow);
-
-    const endRow = document.createElement("div");
-    endRow.className = "results-period";
-
-    const endLabel = document.createElement("p");
-    endLabel.className = "results-period__label";
-    endLabel.textContent = "Дата завершення відстрочки:";
-
-    const endValue = document.createElement("p");
-    endValue.className = "results-period__value";
-    endValue.textContent = formatDisplayDate(result.deferralEndDate);
-
-    endRow.appendChild(endLabel);
-    endRow.appendChild(endValue);
-    wizardResultsTotal.appendChild(endRow);
+    return;
   }
+
+  const periodRow = document.createElement("div");
+  periodRow.className = "results-period";
+
+  const periodLabel = document.createElement("p");
+  periodLabel.className = "results-period__label";
+  periodLabel.textContent = "Планований період відстрочки:";
+
+  const periodValue = document.createElement("p");
+  periodValue.className = "results-period__value";
+  periodValue.textContent =
+    formatDisplayDate(result.contractEndDate) +
+    " – " +
+    formatDisplayDate(result.deferralEndDate);
+
+  periodRow.appendChild(periodLabel);
+  periodRow.appendChild(periodValue);
+  wizardResultsTotal.appendChild(periodRow);
 }
 
 function getContractStartSummaryLabel(status) {
@@ -1343,7 +1335,7 @@ function renderExplanation(result, container) {
     const main = document.createElement("p");
     main.className = "explanation-line__main";
     if (line.detail) {
-      main.textContent = line.label + " - " + line.detail;
+      main.textContent = line.label + " — " + line.detail;
     } else {
       main.textContent = line.label;
     }

@@ -712,41 +712,34 @@ function buildExplanation({
       label: "Гарантована відстрочка",
       detail: "",
       cite: "абз. 2 п. 22",
-      contribution: formatSignedMonths(BASE_DEFERRAL_MONTHS),
+      contribution: formatMonthsLabel(BASE_DEFERRAL_MONTHS),
     },
   ];
 
   if (combatMonths > 0) {
     explanation.push({
       label: getCombatExplanationLabel(undefined, divisor),
-      detail: "",
+      detail: formatDaysLabel(combatDays),
       cite: divisor === 10 ? "абз. 3 п. 22" : "абз. 6 п. 22",
-      contribution:
-        formatSignedMonths(combatMonths) + " — " + formatDaysLabel(combatDays),
+      contribution: formatSignedMonths(combatMonths),
     });
   }
 
   if (usesAfter2022) {
     explanation.push({
       label: "Служба після 24.02.2022",
-      detail: "",
+      detail: formatMonthsLabel(monthsAfter2022),
       cite: "абз. 4 п. 22",
-      contribution:
-        formatSignedMonths(after2022Contribution) +
-        " — " +
-        formatMonthsLabel(monthsAfter2022),
+      contribution: formatSignedMonths(after2022Contribution),
     });
   }
 
   if (usesBefore2022) {
     explanation.push({
       label: "Служба до 24.02.2022",
-      detail: "",
+      detail: formatMonthsLabel(monthsBefore2022),
       cite: "абз. 5 п. 22",
-      contribution:
-        formatSignedMonths(before2022Contribution) +
-        " — " +
-        formatMonthsLabel(monthsBefore2022),
+      contribution: formatSignedMonths(before2022Contribution),
     });
   }
 
