@@ -17,6 +17,7 @@ def build_calculator_browser() -> None:
     calc_src = calc_src.replace("export const RESOLUTION_768_URL", "const RESOLUTION_768_URL")
     calc_src = calc_src.replace("export const RESOLUTION_768_CITE", "const RESOLUTION_768_CITE")
     calc_src = calc_src.replace("export const MAX_SERVICE_PERIODS", "const MAX_SERVICE_PERIODS")
+    calc_src = calc_src.replace("export const EARLIEST_SERVICE_DATE", "const EARLIEST_SERVICE_DATE")
     calc_src = calc_src.replace("export function ", "function ")
 
     browser_calc = f"""(function (global) {{
@@ -52,8 +53,10 @@ def build_calculator_browser() -> None:
     normalizeServicePeriods,
     sumMonthsBefore2022,
     sumMonthsAfter2022,
+    getRelevantServicePeriod,
     servicePeriodsOverlap,
     MAX_SERVICE_PERIODS,
+    EARLIEST_SERVICE_DATE,
     calculateYearsBefore2022,
     calculateYearsAfter2022,
     calculateContractDuration,

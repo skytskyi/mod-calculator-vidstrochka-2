@@ -64,6 +64,9 @@ function formatResolutionCite(paragraphRef) {
 const BASE_DEFERRAL_MONTHS = 6;
 const MAX_MONTHS_BEFORE_2022 = 480;
 
+/** Найраніша дата початку служби, яку приймає калькулятор */
+const EARLIEST_SERVICE_DATE = new Date(1950, 0, 1);
+
 /** Максимальна кількість періодів служби в UI */
 const MAX_SERVICE_PERIODS = 5;
 
@@ -81,7 +84,7 @@ const MAX_SERVICE_PERIODS = 5;
  * @property {Date} [serviceStartDate] Legacy single-period start
  * @property {Date} [serviceEndDate] Legacy single-period end
  * @property {Date} contractStartDate
- * @property {6 | 24} [contractTermChoice] Required for DISCHARGED + COMBAT/BASIC
+ * @property {6 | 24} [contractTermChoice] Legacy; ignored (6 months only via ASSAULT + DISCHARGED)
  * @property {CombatUnitType | string} [combatUnitType]
  * @property {CombatUnitType | string} [combatAssignment] Legacy alias for combatUnitType
  * @property {number} [combatDays]
@@ -121,21 +124,14 @@ const MAX_SERVICE_PERIODS = 5;
 /**
  * @param {ServiceStatus} serviceStatus
  * @param {ContractType} contractType
- * @param {6 | 24} [termChoice]
+ * @param {6 | 24} [_termChoice] Legacy unused parameter
  * @returns {ContractTermMonths}
  */
-function resolveContractTermMonths(serviceStatus, contractType, termChoice) {
+function resolveContractTermMonths(serviceStatus, contractType, _termChoice) {
   if (contractType === ContractType.ASSAULT) {
     if (serviceStatus === ServiceStatus.OBLIGATED) return 14;
     if (serviceStatus === ServiceStatus.ACTIVE) return 10;
     return 6;
-  }
-
-  if (serviceStatus === ServiceStatus.DISCHARGED) {
-    if (termChoice !== 6 && termChoice !== 24) {
-      throw new Error("Оберіть термін контракту: від 6 або 24 місяці");
-    }
-    return termChoice;
   }
 
   return 24;
@@ -146,15 +142,10 @@ function resolveContractTermMonths(serviceStatus, contractType, termChoice) {
  * @param {CombatUnitType | string} [combatUnitType]
  * @returns {10 | 30}
  */
-function resolveCombatDivisor(termMonths, combatUnitType) {
-  if (termMonths === 6) {
-    return combatUnitType === CombatUnitType.NON_COMBAT_UNIT ||
-      combatUnitType === "NOT_FIRST_LINE"
-      ? 30
-      : 10;
-  }
-
-  if (termMonths === 10 || termMonths === 14) {
+function resolveCombatDivisor(termMonths, _combatUnitType) {
+  // Assault terms (6/10/14) always use the list-position rate (÷10 / 1:3).
+  // Basic/combat 24-month contracts use ÷30.
+  if (termMonths === 6 || termMonths === 10 || termMonths === 14) {
     return 10;
   }
 
@@ -302,15 +293,30 @@ function normalizeServicePeriods(input) {
 }
 
 /**
+ * Only the last continuous service period counts for before/after-2022 seniority.
+ *
+ * @param {ServicePeriod[]} periods
+ * @returns {ServicePeriod | null}
+ */
+function getRelevantServicePeriod(periods) {
+  if (!Array.isArray(periods) || periods.length === 0) {
+    return null;
+  }
+  const sorted = sortServicePeriods(periods);
+  return sorted[sorted.length - 1];
+}
+
+/**
  * @param {ServicePeriod[]} periods
  * @returns {number}
  */
 function sumMonthsBefore2022(periods) {
-  let total = 0;
-  periods.forEach(function (period) {
-    total += calculateMonthsBefore2022(period.startDate, period.endDate);
-  });
-  return Math.min(total, MAX_MONTHS_BEFORE_2022);
+  const period = getRelevantServicePeriod(periods);
+  if (!period) return 0;
+  return Math.min(
+    calculateMonthsBefore2022(period.startDate, period.endDate),
+    MAX_MONTHS_BEFORE_2022
+  );
 }
 
 /**
@@ -319,15 +325,13 @@ function sumMonthsBefore2022(periods) {
  * @returns {number}
  */
 function sumMonthsAfter2022(periods, contractStartDate) {
-  let total = 0;
-  periods.forEach(function (period) {
-    total += calculateMonthsAfter2022(
-      period.startDate,
-      contractStartDate,
-      period.endDate
-    );
-  });
-  return total;
+  const period = getRelevantServicePeriod(periods);
+  if (!period) return 0;
+  return calculateMonthsAfter2022(
+    period.startDate,
+    contractStartDate,
+    period.endDate
+  );
 }
 
 /**
@@ -378,11 +382,11 @@ function calculateYearsAfter2022(
 /**
  * @param {ServiceStatus} serviceStatus
  * @param {ContractType} contractType
- * @param {6 | 24} [termChoice]
+ * @param {6 | 24} [_termChoice] Legacy unused parameter
  * @returns {number}
  */
-function calculateContractDuration(serviceStatus, contractType, termChoice) {
-  return resolveContractTermMonths(serviceStatus, contractType, termChoice);
+function calculateContractDuration(serviceStatus, contractType, _termChoice) {
+  return resolveContractTermMonths(serviceStatus, contractType, _termChoice);
 }
 
 /**
@@ -498,28 +502,9 @@ function calculate(input) {
  * @param {CombatUnitType | string} [rawUnitType]
  * @returns {CombatUnitType}
  */
-function resolveCombatUnitTypeForTerm(termMonths, rawUnitType) {
-  if (termMonths === 6) {
-    return normalizeCombatUnitType(rawUnitType);
-  }
-
-  if (
-    rawUnitType === CombatUnitType.COMBAT_UNIT ||
-    rawUnitType === CombatUnitType.NON_COMBAT_UNIT ||
-    rawUnitType === "FIRST_LINE" ||
-    rawUnitType === "NOT_FIRST_LINE" ||
-    rawUnitType === "COMBAT_UNIT" ||
-    rawUnitType === "NON_COMBAT_UNIT" ||
-    rawUnitType === "NONE"
-  ) {
-    try {
-      return normalizeCombatUnitType(rawUnitType);
-    } catch (_error) {
-      // Fall through to term default.
-    }
-  }
-
-  // Matrix: unit type is N/A; divisor is fixed by term (10 for 10/14, 30 for 24).
+function resolveCombatUnitTypeForTerm(termMonths, _rawUnitType) {
+  // Assault / list-position contracts always count as combat units (÷10).
+  // 24-month contracts use the non-combat / ÷30 explanation label path.
   return termMonths === 24
     ? CombatUnitType.NON_COMBAT_UNIT
     : CombatUnitType.COMBAT_UNIT;
@@ -577,12 +562,6 @@ function validateInput(input) {
     input.contractStartDate instanceof Date &&
     !Number.isNaN(input.contractStartDate.getTime());
 
-  const termMonths = resolveContractTermMonths(
-    input.serviceStatus,
-    input.contractType,
-    input.contractTermChoice
-  );
-
   const periods = normalizeServicePeriods(input);
   const requiresService =
     input.serviceStatus === ServiceStatus.ACTIVE ||
@@ -600,6 +579,12 @@ function validateInput(input) {
     }
 
     periods.forEach(function (period, index) {
+      if (isBefore(period.startDate, EARLIEST_SERVICE_DATE)) {
+        throw new Error(
+          "Дата початку військової служби не може бути раніше 01.01.1950"
+        );
+      }
+
       const isLast = index === periods.length - 1;
       const needsEnd =
         input.serviceStatus === ServiceStatus.DISCHARGED || !isLast;
@@ -664,10 +649,6 @@ function validateInput(input) {
     throw new Error(
       "Кількість днів участі в бойових діях не може перевищувати 480"
     );
-  }
-
-  if (termMonths === 6) {
-    normalizeCombatUnitType(input.combatUnitType ?? input.combatAssignment);
   }
 }
 
@@ -889,8 +870,10 @@ function pluralUk(value, one, few, many) {
     normalizeServicePeriods,
     sumMonthsBefore2022,
     sumMonthsAfter2022,
+    getRelevantServicePeriod,
     servicePeriodsOverlap,
     MAX_SERVICE_PERIODS,
+    EARLIEST_SERVICE_DATE,
     calculateYearsBefore2022,
     calculateYearsAfter2022,
     calculateContractDuration,

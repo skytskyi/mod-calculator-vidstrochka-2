@@ -27,19 +27,13 @@ describe("resolveContractTermMonths", () => {
     ).toBe(6);
   });
 
-  it("requires term choice for discharged combat/basic", () => {
+  it("uses fixed 24 months for combat/basic for all statuses", () => {
     expect(
-      resolveContractTermMonths(ServiceStatus.DISCHARGED, ContractType.COMBAT, 6)
-    ).toBe(6);
-    expect(
-      resolveContractTermMonths(ServiceStatus.DISCHARGED, ContractType.BASIC, 24)
-    ).toBe(24);
-    expect(() =>
       resolveContractTermMonths(ServiceStatus.DISCHARGED, ContractType.COMBAT)
-    ).toThrow("Оберіть термін контракту");
-  });
-
-  it("uses fixed 24 months for obligated/active combat/basic", () => {
+    ).toBe(24);
+    expect(
+      resolveContractTermMonths(ServiceStatus.DISCHARGED, ContractType.BASIC)
+    ).toBe(24);
     expect(
       resolveContractTermMonths(ServiceStatus.ACTIVE, ContractType.COMBAT)
     ).toBe(24);
@@ -59,9 +53,9 @@ describe("combat months and divisors", () => {
     expect(calculateCombatMonths(0, 10)).toBe(0);
   });
 
-  it("resolves divisors by term and unit type", () => {
+  it("resolves divisors by term (unit type ignored)", () => {
     expect(resolveCombatDivisor(6, CombatUnitType.COMBAT_UNIT)).toBe(10);
-    expect(resolveCombatDivisor(6, CombatUnitType.NON_COMBAT_UNIT)).toBe(30);
+    expect(resolveCombatDivisor(6, CombatUnitType.NON_COMBAT_UNIT)).toBe(10);
     expect(resolveCombatDivisor(10, CombatUnitType.NON_COMBAT_UNIT)).toBe(10);
     expect(resolveCombatDivisor(14, CombatUnitType.COMBAT_UNIT)).toBe(10);
     expect(resolveCombatDivisor(24, CombatUnitType.COMBAT_UNIT)).toBe(30);
@@ -147,11 +141,10 @@ describe("test vectors V1–V7", () => {
     expect(result.deferralDurationLabel).toBe("8 місяців");
   });
 
-  it("V4: discharged + combat from 6 months not in combat units → 7 months", () => {
+  it("V4: discharged + assault always uses ÷10 even if non-combat passed → 8 months", () => {
     const result = calculate({
       serviceStatus: ServiceStatus.DISCHARGED,
-      contractType: ContractType.COMBAT,
-      contractTermChoice: 6,
+      contractType: ContractType.ASSAULT,
       serviceStartDate: new Date(2020, 0, 1),
       serviceEndDate: new Date(2025, 0, 1),
       contractStartDate: new Date(2026, 8, 1),
@@ -160,8 +153,8 @@ describe("test vectors V1–V7", () => {
     });
 
     expect(result.contractTermMonths).toBe(6);
-    expect(result.totalDeferralMonths).toBe(7);
-    expect(result.deferralDurationLabel).toBe("7 місяців");
+    expect(result.totalDeferralMonths).toBe(8);
+    expect(result.deferralDurationLabel).toBe("8 місяців");
   });
 
   it("V5: military + combat with service before 2022 → 1 year 9 months", () => {
@@ -236,22 +229,35 @@ describe("validation and optional contract date", () => {
     expect(result.deferralEndDate).toBeNull();
   });
 
-  it("requires unit type for 6-month term", () => {
+  it("allows 6-month term without combat unit type", () => {
+    const result = calculate({
+      serviceStatus: ServiceStatus.DISCHARGED,
+      contractType: ContractType.ASSAULT,
+      serviceStartDate: new Date(2020, 3, 15),
+      serviceEndDate: new Date(2025, 0, 1),
+      contractStartDate: new Date(2026, 8, 1),
+      combatDays: 10,
+    });
+
+    expect(result.contractTermMonths).toBe(6);
+    expect(result.totalDeferralMonths).toBe(7);
+  });
+
+  it("rejects service start before 01.01.1950", () => {
     expect(() =>
       calculate({
-        serviceStatus: ServiceStatus.DISCHARGED,
-        contractType: ContractType.ASSAULT,
-        serviceStartDate: new Date(2020, 3, 15),
-        serviceEndDate: new Date(2025, 0, 1),
+        serviceStatus: ServiceStatus.ACTIVE,
+        contractType: ContractType.COMBAT,
+        serviceStartDate: new Date(1949, 11, 31),
         contractStartDate: new Date(2026, 8, 1),
-        combatDays: 10,
+        combatDays: 0,
       })
-    ).toThrow("Оберіть тип участі в бойових діях");
+    ).toThrow("01.01.1950");
   });
 });
 
 describe("multiple service periods", () => {
-  it("sums months across separate periods", () => {
+  it("uses only the last continuous period for seniority", () => {
     const result = calculate({
       serviceStatus: ServiceStatus.ACTIVE,
       contractType: ContractType.COMBAT,
@@ -269,8 +275,9 @@ describe("multiple service periods", () => {
     });
 
     expect(result.contractTermMonths).toBe(24);
-    expect(result.monthsBefore2022).toBe(71);
-    expect(result.totalDeferralMonths).toBe(6 + Math.floor(71 / 12) + 1);
+    // Last period starts after 24.02.2022 → no before-2022 seniority from it.
+    expect(result.monthsBefore2022).toBe(0);
+    expect(result.totalDeferralMonths).toBe(6);
   });
 
   it("rejects overlapping periods", () => {
@@ -278,7 +285,6 @@ describe("multiple service periods", () => {
       calculate({
         serviceStatus: ServiceStatus.DISCHARGED,
         contractType: ContractType.BASIC,
-        contractTermChoice: 24,
         servicePeriods: [
           {
             startDate: new Date(2018, 0, 1),

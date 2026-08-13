@@ -61,23 +61,21 @@ const STEP_META = {
   status: {
     title: "Ваш статус та дані про службу",
     help:
-      "Оберіть свій статус на момент укладення мотиваційного контракту. Якщо ви військовий або військовозобов'язаний з досвідом бойових дій, вкажіть один або кілька періодів служби (до 5).",
+      "Оберіть свій статус на момент укладення мотиваційного контракту. Якщо ви військовий або військовозобов'язаний з досвідом бойових дій, можна вказати кілька періодів служби (до 5). Для розрахунку відстрочки враховується лише останній безперервний період.",
   },
   contract: {
     title: "Дані про новий контракт",
     help:
-      "Оберіть тип контракту та за потреби термін. Дату підписання можна не вказувати — тоді система порахує лише строк відстрочки.",
+      "Оберіть тип контракту. Дату підписання можна не вказувати — тоді система порахує лише строк відстрочки.",
   },
   combat: {
-    title: "Участь у бойових діях під час нового контракту",
+    title: "Кількість днів участі в бойових діях",
     help:
       "Вкажіть загальну кількість днів безпосередньої участі у бойових діях лише за останній безперервний період проходження військової служби.",
-    titleWithUnit: "Участь у бойових діях під час нового контракту",
-    helpWithUnit:
-      "Оберіть тип військової частини та вкажіть кількість днів участі у бойових діях за останній безперервний період служби.",
-    titleDaysOnly: "Кількість днів участі в бойових діях",
   },
 };
+
+const EARLIEST_SERVICE_DATE_VALUE = "1950-01-01";
 
 const CONTRACT_START_LABELS = {
   obligated: "Планова дата підписання нового контракту",
@@ -169,6 +167,7 @@ function createDateField(inputId, fieldName) {
   input.id = inputId;
   input.className = "date-input is-empty";
   input.type = "date";
+  input.min = EARLIEST_SERVICE_DATE_VALUE;
   input.autocomplete = "off";
   input.dataset.periodField = fieldName;
   input.name =
@@ -415,15 +414,12 @@ function getResolvedTermMonths() {
 }
 
 function showsCombatUnitChoice() {
-  return getResolvedTermMonths() === 6;
+  return false;
 }
 
 /** @returns {string | null} */
 function getEffectiveCombatUnitType() {
-  if (!showsCombatUnitChoice()) {
-    return null;
-  }
-  return getSelectedCombatUnitType();
+  return null;
 }
 
 function clearCombatUnitSelection() {
@@ -433,14 +429,8 @@ function clearCombatUnitSelection() {
 }
 
 function getCombatStepMeta() {
-  if (showsCombatUnitChoice()) {
-    return {
-      title: STEP_META.combat.titleWithUnit,
-      help: STEP_META.combat.helpWithUnit,
-    };
-  }
   return {
-    title: STEP_META.combat.titleDaysOnly,
+    title: STEP_META.combat.title,
     help: STEP_META.combat.help,
   };
 }
@@ -452,11 +442,10 @@ function getSelectedContractTermChoice() {
   return value === 6 || value === 24 ? value : null;
 }
 
-function requiresContractTermChoice(status, type) {
-  return (
-    status === ServiceStatus.DISCHARGED &&
-    (type === ContractType.COMBAT || type === ContractType.BASIC)
-  );
+function requiresContractTermChoice(_status, _type) {
+  // 6 months is only available for ASSAULT + DISCHARGED (fixed, no choice).
+  // COMBAT/BASIC are always 24 months for all statuses.
+  return false;
 }
 
 function clearContractTermChoice() {
@@ -495,17 +484,11 @@ function syncContractTermLabels() {
   }
 
   if (contractTermCombat) {
-    contractTermCombat.textContent =
-      status === ServiceStatus.DISCHARGED
-        ? "Термін контракту — від 6 або 24 місяці"
-        : "Термін контракту — 24 місяці";
+    contractTermCombat.textContent = "Термін контракту — 24 місяці";
   }
 
   if (contractTermBasic) {
-    contractTermBasic.textContent =
-      status === ServiceStatus.DISCHARGED
-        ? "Термін контракту — від 6 або 24 місяці"
-        : "Термін контракту — 24 місяці";
+    contractTermBasic.textContent = "Термін контракту — 24 місяці";
   }
 }
 
@@ -549,15 +532,10 @@ function syncContractTermField() {
 }
 
 function syncCombatFields() {
-  const showUnitChoice = showsCombatUnitChoice();
-
   if (combatAssignmentField) {
-    combatAssignmentField.hidden = !showUnitChoice;
+    combatAssignmentField.hidden = true;
   }
-
-  if (!showUnitChoice) {
-    clearCombatUnitSelection();
-  }
+  clearCombatUnitSelection();
 
   if (combatDaysField) {
     combatDaysField.hidden = false;
