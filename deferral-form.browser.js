@@ -250,6 +250,7 @@ function syncServicePeriodUi() {
   const rows = getServicePeriodRows();
 
   rows.forEach(function (row) {
+    const startLabel = row.querySelector(".field--date:not(.service-period__end) .field__legend");
     const endField = row.querySelector(".service-period__end");
     const endLabel = endField && endField.querySelector(".field__legend");
     const hint = row.querySelector(".service-period__hint");
@@ -263,10 +264,18 @@ function syncServicePeriodUi() {
       endField.hidden = false;
     }
 
-    if (endLabel) {
-      if (status === ServiceStatus.DISCHARGED) {
-        endLabel.textContent = "Дата звільнення / закінчення";
-      } else {
+    if (status === ServiceStatus.DISCHARGED) {
+      if (startLabel) {
+        startLabel.textContent = "Дата початку військової служби";
+      }
+      if (endLabel) {
+        endLabel.textContent = "Дата звільнення з військової служби";
+      }
+    } else {
+      if (startLabel) {
+        startLabel.textContent = "Дата початку";
+      }
+      if (endLabel) {
         endLabel.textContent = "Дата закінчення";
       }
     }
