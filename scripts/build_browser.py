@@ -91,7 +91,7 @@ def build_form_browser() -> None:
 
     browser_form = f"""(function () {{
   const {{ format }} = window.DateFnsLite;
-  const {{ ContractType, ServiceStatus, CombatUnitType, MAX_SERVICE_PERIODS, RESOLUTION_768_URL, RESOLUTION_768_CITE, calculate, resolveContractTermMonths, getCombatExplanationLabels }} = window.DeferralCalculator;
+  const {{ ContractType, ServiceStatus, CombatUnitType, RESOLUTION_768_URL, RESOLUTION_768_CITE, calculate, resolveContractTermMonths, getCombatExplanationLabels }} = window.DeferralCalculator;
 
 {form_src}
 }})();

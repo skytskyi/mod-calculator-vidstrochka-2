@@ -1,6 +1,6 @@
 (function () {
   const { format } = window.DateFnsLite;
-  const { ContractType, ServiceStatus, CombatUnitType, MAX_SERVICE_PERIODS, RESOLUTION_768_URL, RESOLUTION_768_CITE, calculate, resolveContractTermMonths, getCombatExplanationLabels } = window.DeferralCalculator;
+  const { ContractType, ServiceStatus, CombatUnitType, RESOLUTION_768_URL, RESOLUTION_768_CITE, calculate, resolveContractTermMonths, getCombatExplanationLabels } = window.DeferralCalculator;
 
 
 const section = document.querySelector(".form-block");
@@ -13,7 +13,6 @@ const combatAssignmentField = document.getElementById("field-combat-assignment")
 const combatDaysInput = document.getElementById("combat-days-input");
 const servicePeriodsField = document.getElementById("field-service-periods");
 const servicePeriodsList = document.getElementById("service-periods-list");
-const servicePeriodAddBtn = document.getElementById("service-period-add");
 const contractTermField = document.getElementById("field-contract-term");
 const contractStartLabel = document.getElementById("contract-start-label");
 const contractTermAssault = document.getElementById("contract-term-assault");
@@ -61,7 +60,7 @@ const STEP_META = {
   status: {
     title: "Ваш статус та дані про службу",
     help:
-      "Оберіть свій статус на момент укладення мотиваційного контракту. Якщо ви військовий або військовозобов'язаний з досвідом бойових дій, можна вказати кілька періодів служби (до 5). Для розрахунку відстрочки враховується лише останній безперервний період.",
+      "Оберіть свій статус на момент укладення мотиваційного контракту. Якщо ви військовий або військовозобов'язаний з досвідом бойових дій, вкажіть останній безперервний період служби — саме його система врахує в розрахунку.",
   },
   contract: {
     title: "Дані про новий контракт",
@@ -192,6 +191,8 @@ function createDateField(inputId, fieldName) {
   return wrap;
 }
 
+const SERVICE_PERIOD_TITLE = "Останній безперервний період служби";
+
 function createServicePeriodRow(index) {
   const row = document.createElement("div");
   row.className = "service-period";
@@ -202,18 +203,9 @@ function createServicePeriodRow(index) {
 
   const title = document.createElement("p");
   title.className = "service-period__title";
-  title.textContent = "Період служби " + (index + 1);
-
-  const removeBtn = document.createElement("button");
-  removeBtn.type = "button";
-  removeBtn.className = "btn-text service-period__remove";
-  removeBtn.textContent = "Видалити";
-  removeBtn.addEventListener("click", function () {
-    removeServicePeriod(row);
-  });
+  title.textContent = SERVICE_PERIOD_TITLE;
 
   head.appendChild(title);
-  head.appendChild(removeBtn);
 
   const startField = document.createElement("div");
   startField.className = "field field--date";
@@ -253,43 +245,18 @@ function createServicePeriodRow(index) {
   return row;
 }
 
-function renumberServicePeriods() {
-  getServicePeriodRows().forEach(function (row, index) {
-    row.dataset.periodIndex = String(index);
-    const title = row.querySelector(".service-period__title");
-    if (title) title.textContent = "Період служби " + (index + 1);
-
-    const startInput = row.querySelector('[data-period-field="start"]');
-    const endInput = row.querySelector('[data-period-field="end"]');
-    const startLabel = row.querySelector(".field--date label");
-    const endLabel = row.querySelector(".service-period__end label");
-
-    if (startInput) {
-      startInput.id = "service-period-" + index + "-start";
-      if (startLabel) startLabel.htmlFor = startInput.id;
-    }
-    if (endInput) {
-      endInput.id = "service-period-" + index + "-end";
-      if (endLabel) endLabel.htmlFor = endInput.id;
-    }
-  });
-}
-
 function syncServicePeriodUi() {
   const status = getSelectedServiceStatus();
   const rows = getServicePeriodRows();
-  const total = rows.length;
 
-  rows.forEach(function (row, index) {
-    const removeBtn = row.querySelector(".service-period__remove");
+  rows.forEach(function (row) {
     const endField = row.querySelector(".service-period__end");
     const endLabel = endField && endField.querySelector(".field__legend");
     const hint = row.querySelector(".service-period__hint");
-    const isActiveLast =
-      status === ServiceStatus.ACTIVE && index === total - 1;
+    const title = row.querySelector(".service-period__title");
 
-    if (removeBtn) {
-      removeBtn.hidden = total <= 1;
+    if (title) {
+      title.textContent = SERVICE_PERIOD_TITLE;
     }
 
     if (endField) {
@@ -297,7 +264,7 @@ function syncServicePeriodUi() {
     }
 
     if (endLabel) {
-      if (status === ServiceStatus.DISCHARGED && index === total - 1) {
+      if (status === ServiceStatus.DISCHARGED) {
         endLabel.textContent = "Дата звільнення / закінчення";
       } else {
         endLabel.textContent = "Дата закінчення";
@@ -305,35 +272,21 @@ function syncServicePeriodUi() {
     }
 
     if (hint) {
-      hint.hidden = !isActiveLast;
+      hint.hidden = status !== ServiceStatus.ACTIVE;
     }
   });
-
-  if (servicePeriodAddBtn) {
-    servicePeriodAddBtn.hidden = total >= MAX_SERVICE_PERIODS;
-    servicePeriodAddBtn.disabled = total >= MAX_SERVICE_PERIODS;
-  }
 }
 
 function addServicePeriod(options) {
   if (!servicePeriodsList) return;
-  if (getServicePeriodRows().length >= MAX_SERVICE_PERIODS) return;
+  if (getServicePeriodRows().length >= 1) return;
 
   const silent = options && options.silent;
-  const index = getServicePeriodRows().length;
-  servicePeriodsList.appendChild(createServicePeriodRow(index));
+  servicePeriodsList.appendChild(createServicePeriodRow(0));
   syncServicePeriodUi();
   if (!silent) {
     onWizardInputChange();
   }
-}
-
-function removeServicePeriod(row) {
-  if (!row || getServicePeriodRows().length <= 1) return;
-  row.remove();
-  renumberServicePeriods();
-  syncServicePeriodUi();
-  onWizardInputChange();
 }
 
 function clearServicePeriods() {
@@ -343,11 +296,17 @@ function clearServicePeriods() {
 
 function ensureServicePeriods() {
   if (!servicePeriodsList) return;
-  if (getServicePeriodRows().length === 0) {
+  const rows = getServicePeriodRows();
+  if (rows.length === 0) {
     addServicePeriod({ silent: true });
-  } else {
-    syncServicePeriodUi();
+    return;
   }
+  // UI allows only one last continuous period.
+  while (getServicePeriodRows().length > 1) {
+    const extras = getServicePeriodRows();
+    extras[extras.length - 1].remove();
+  }
+  syncServicePeriodUi();
 }
 
 /**
@@ -1147,16 +1106,12 @@ function collectInputSummaryRows(result) {
     });
   }
 
-  servicePeriods.forEach(function (period, index) {
-    const label =
-      servicePeriods.length > 1
-        ? "Період служби " + (index + 1)
-        : "Період служби";
+  servicePeriods.forEach(function (period) {
     const endLabel = period.endDate
       ? formatDisplayDate(period.endDate)
       : "досі служить";
     rows.push({
-      label: label,
+      label: SERVICE_PERIOD_TITLE,
       value: formatDisplayDate(period.startDate) + " – " + endLabel,
     });
   });
@@ -1532,12 +1487,6 @@ if (wizardRestart) {
 
 if (wizardEdit) {
   wizardEdit.addEventListener("click", returnToWizard);
-}
-
-if (servicePeriodAddBtn) {
-  servicePeriodAddBtn.addEventListener("click", function () {
-    addServicePeriod();
-  });
 }
 
 bindStepper("combat-days-input", "combat-days-dec", "combat-days-inc", 0, MAX_COMBAT_DAYS);
