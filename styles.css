@@ -1628,8 +1628,6 @@ body.mod-nav-open {
 
 .service-periods__after:not(:empty) + .switch-field {
   margin-top: 24px;
-  padding-top: 24px;
-  border-top: 1px dotted rgb(107 107 107);
 }
 
 .switch-field + .service-periods__before:not(:empty) {
