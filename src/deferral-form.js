@@ -293,15 +293,33 @@ function ensureServicePeriods() {
     status === ServiceStatus.ACTIVE || status === ServiceStatus.DISCHARGED;
   const wantAfter = status === ServiceStatus.ACTIVE;
 
-  const existingBefore = getServicePeriodRowByKind(PERIOD_KIND_BEFORE);
-  const existingAfter = getServicePeriodRowByKind(PERIOD_KIND_AFTER);
-
   if (!wantBefore && !wantAfter) {
     clearServicePeriods();
     return;
   }
 
-  // Rebuild in stable order: before, then after.
+  const existingBefore = getServicePeriodRowByKind(PERIOD_KIND_BEFORE);
+  const existingAfter = getServicePeriodRowByKind(PERIOD_KIND_AFTER);
+  const hasBefore = !!existingBefore;
+  const hasAfter = !!existingAfter;
+
+  if (hasBefore === wantBefore && hasAfter === wantAfter) {
+    // Keep DOM order: before first, after second.
+    if (wantBefore && wantAfter && existingBefore && existingAfter) {
+      const children = getServicePeriodRows();
+      if (
+        children.length === 2 &&
+        children[0].dataset.periodKind === PERIOD_KIND_BEFORE
+      ) {
+        syncServicePeriodUi();
+        return;
+      }
+    } else {
+      syncServicePeriodUi();
+      return;
+    }
+  }
+
   const beforeValues = existingBefore
     ? {
         start: existingBefore.querySelector('[data-period-field="start"]').value,
