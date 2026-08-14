@@ -256,49 +256,79 @@ describe("validation and optional contract date", () => {
   });
 });
 
-describe("multiple service periods", () => {
-  it("uses only the last continuous period for seniority", () => {
+describe("split before/after service periods", () => {
+  it("uses explicit before/after periods for active assault (term 10)", () => {
     const result = calculate({
       serviceStatus: ServiceStatus.ACTIVE,
-      contractType: ContractType.COMBAT,
-      servicePeriods: [
-        {
-          startDate: new Date(2014, 0, 1),
-          endDate: new Date(2019, 11, 31),
-        },
-        {
-          startDate: new Date(2022, 2, 1),
-        },
-      ],
+      contractType: ContractType.ASSAULT,
+      servicePeriodBefore2022: {
+        startDate: new Date(2018, 0, 1),
+        endDate: new Date(2021, 11, 31),
+      },
+      servicePeriodAfter2022: {
+        startDate: new Date(2022, 2, 1),
+      },
       contractStartDate: new Date(2024, 5, 1),
       combatDays: 0,
     });
 
+    expect(result.contractTermMonths).toBe(10);
+    expect(result.monthsBefore2022).toBeGreaterThan(0);
+    expect(result.monthsAfter2022).toBeGreaterThan(0);
+    expect(result.totalDeferralMonths).toBeGreaterThan(6);
+  });
+
+  it("for discharged combat uses before period and ignores unused after absence", () => {
+    const result = calculate({
+      serviceStatus: ServiceStatus.DISCHARGED,
+      contractType: ContractType.COMBAT,
+      servicePeriodBefore2022: {
+        startDate: new Date(2015, 0, 1),
+        endDate: new Date(2020, 0, 1),
+      },
+      contractStartDate: new Date(2026, 8, 1),
+      combatDays: 0,
+    });
+
     expect(result.contractTermMonths).toBe(24);
-    // Last period starts after 24.02.2022 → no before-2022 seniority from it.
+    expect(result.monthsBefore2022).toBe(60);
+    expect(result.monthsAfter2022).toBe(0);
+    expect(result.totalDeferralMonths).toBe(6 + Math.floor(60 / 12) + 1);
+  });
+
+  it("for discharged assault collects before but does not apply it (term 6)", () => {
+    const result = calculate({
+      serviceStatus: ServiceStatus.DISCHARGED,
+      contractType: ContractType.ASSAULT,
+      servicePeriodBefore2022: {
+        startDate: new Date(2015, 0, 1),
+        endDate: new Date(2020, 0, 1),
+      },
+      contractStartDate: new Date(2026, 8, 1),
+      combatDays: 0,
+    });
+
+    expect(result.contractTermMonths).toBe(6);
     expect(result.monthsBefore2022).toBe(0);
     expect(result.totalDeferralMonths).toBe(6);
   });
 
-  it("rejects overlapping periods", () => {
+  it("rejects before period that ends on/after 24.02.2022", () => {
     expect(() =>
       calculate({
-        serviceStatus: ServiceStatus.DISCHARGED,
-        contractType: ContractType.BASIC,
-        servicePeriods: [
-          {
-            startDate: new Date(2018, 0, 1),
-            endDate: new Date(2021, 0, 1),
-          },
-          {
-            startDate: new Date(2020, 5, 1),
-            endDate: new Date(2023, 0, 1),
-          },
-        ],
+        serviceStatus: ServiceStatus.ACTIVE,
+        contractType: ContractType.ASSAULT,
+        servicePeriodBefore2022: {
+          startDate: new Date(2020, 0, 1),
+          endDate: new Date(2022, 5, 1),
+        },
+        servicePeriodAfter2022: {
+          startDate: new Date(2022, 2, 1),
+        },
         contractStartDate: new Date(2026, 8, 1),
         combatDays: 0,
       })
-    ).toThrow("Періоди служби не повинні перетинатися");
+    ).toThrow("до 24.02.2022");
   });
 });
 

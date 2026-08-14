@@ -53,6 +53,8 @@ def build_calculator_browser() -> None:
     normalizeServicePeriods,
     sumMonthsBefore2022,
     sumMonthsAfter2022,
+    resolveBefore2022Period,
+    resolveAfter2022Period,
     getRelevantServicePeriod,
     servicePeriodsOverlap,
     MAX_SERVICE_PERIODS,
@@ -91,7 +93,7 @@ def build_form_browser() -> None:
 
     browser_form = f"""(function () {{
   const {{ format }} = window.DateFnsLite;
-  const {{ ContractType, ServiceStatus, CombatUnitType, RESOLUTION_768_URL, RESOLUTION_768_CITE, calculate, resolveContractTermMonths, getCombatExplanationLabels }} = window.DeferralCalculator;
+  const {{ ContractType, ServiceStatus, CombatUnitType, RESOLUTION_768_URL, RESOLUTION_768_CITE, WAR_START_DATE, calculate, resolveContractTermMonths, getCombatExplanationLabels }} = window.DeferralCalculator;
 
 {form_src}
 }})();

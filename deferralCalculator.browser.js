@@ -81,6 +81,8 @@ const MAX_SERVICE_PERIODS = 5;
  * @property {ContractType} contractType
  * @property {ServiceStatus} serviceStatus
  * @property {ServicePeriod[]} [servicePeriods]
+ * @property {ServicePeriod} [servicePeriodBefore2022]
+ * @property {ServicePeriod} [servicePeriodAfter2022]
  * @property {Date} [serviceStartDate] Legacy single-period start
  * @property {Date} [serviceEndDate] Legacy single-period end
  * @property {Date} contractStartDate
@@ -293,7 +295,8 @@ function normalizeServicePeriods(input) {
 }
 
 /**
- * Only the last continuous service period counts for before/after-2022 seniority.
+ * Only the last continuous service period counts for before/after-2022 seniority
+ * when using the legacy single-period / servicePeriods input shape.
  *
  * @param {ServicePeriod[]} periods
  * @returns {ServicePeriod | null}
@@ -304,6 +307,28 @@ function getRelevantServicePeriod(periods) {
   }
   const sorted = sortServicePeriods(periods);
   return sorted[sorted.length - 1];
+}
+
+/**
+ * @param {CalculatorInput} input
+ * @returns {ServicePeriod | null}
+ */
+function resolveBefore2022Period(input) {
+  if (input.servicePeriodBefore2022 && input.servicePeriodBefore2022.startDate) {
+    return input.servicePeriodBefore2022;
+  }
+  return getRelevantServicePeriod(normalizeServicePeriods(input));
+}
+
+/**
+ * @param {CalculatorInput} input
+ * @returns {ServicePeriod | null}
+ */
+function resolveAfter2022Period(input) {
+  if (input.servicePeriodAfter2022 && input.servicePeriodAfter2022.startDate) {
+    return input.servicePeriodAfter2022;
+  }
+  return getRelevantServicePeriod(normalizeServicePeriods(input));
 }
 
 /**
@@ -419,8 +444,6 @@ function calculate(input) {
   const divisor = resolveCombatDivisor(termMonths, combatUnitType);
   const combatMonths = calculateCombatMonths(combatDays, divisor);
 
-  const periods = normalizeServicePeriods(input);
-  const hasServicePeriods = periods.length > 0;
   const hasContractStart =
     input.contractStartDate instanceof Date &&
     !Number.isNaN(input.contractStartDate.getTime());
@@ -428,18 +451,28 @@ function calculate(input) {
     ? input.contractStartDate
     : new Date();
 
+  const beforePeriod = resolveBefore2022Period(input);
+  const afterPeriod = resolveAfter2022Period(input);
+
   let monthsBefore2022 = 0;
   let monthsAfter2022 = 0;
   let before2022Contribution = 0;
   let after2022Contribution = 0;
 
-  if (usesBefore2022 && hasServicePeriods) {
-    monthsBefore2022 = sumMonthsBefore2022(periods);
+  if (usesBefore2022 && beforePeriod) {
+    monthsBefore2022 = Math.min(
+      calculateMonthsBefore2022(beforePeriod.startDate, beforePeriod.endDate),
+      MAX_MONTHS_BEFORE_2022
+    );
     before2022Contribution = calculateBefore2022Contribution(monthsBefore2022);
   }
 
-  if (usesAfter2022 && hasServicePeriods) {
-    monthsAfter2022 = sumMonthsAfter2022(periods, serviceAnchorDate);
+  if (usesAfter2022 && afterPeriod) {
+    monthsAfter2022 = calculateMonthsAfter2022(
+      afterPeriod.startDate,
+      serviceAnchorDate,
+      afterPeriod.endDate
+    );
     after2022Contribution = calculateAfter2022Contribution(monthsAfter2022);
   }
 
@@ -476,8 +509,8 @@ function calculate(input) {
     monthsAfter2022,
     before2022Contribution,
     after2022Contribution,
-    usesBefore2022: usesBefore2022 && hasServicePeriods,
-    usesAfter2022: usesAfter2022 && hasServicePeriods,
+    usesBefore2022: usesBefore2022 && !!beforePeriod,
+    usesAfter2022: usesAfter2022 && !!afterPeriod,
     totalDeferralMonths,
   });
 
@@ -562,76 +595,38 @@ function validateInput(input) {
     input.contractStartDate instanceof Date &&
     !Number.isNaN(input.contractStartDate.getTime());
 
-  const periods = normalizeServicePeriods(input);
-  const requiresService =
-    input.serviceStatus === ServiceStatus.ACTIVE ||
-    input.serviceStatus === ServiceStatus.DISCHARGED;
+  const hasSplitPeriods =
+    !!(input.servicePeriodBefore2022 && input.servicePeriodBefore2022.startDate) ||
+    !!(input.servicePeriodAfter2022 && input.servicePeriodAfter2022.startDate);
 
-  if (requiresService) {
-    if (periods.length === 0) {
-      throw new Error("Вкажіть дату початку військової служби");
-    }
-
-    if (periods.length > MAX_SERVICE_PERIODS) {
-      throw new Error(
-        "Можна вказати не більше " + MAX_SERVICE_PERIODS + " періодів служби"
-      );
-    }
-
-    periods.forEach(function (period, index) {
-      if (isBefore(period.startDate, EARLIEST_SERVICE_DATE)) {
-        throw new Error(
-          "Дата початку військової служби не може бути раніше 01.01.1950"
-        );
-      }
-
-      const isLast = index === periods.length - 1;
-      const needsEnd =
-        input.serviceStatus === ServiceStatus.DISCHARGED || !isLast;
-
-      if (needsEnd && !(period.endDate instanceof Date)) {
-        throw new Error("Вкажіть дату закінчення періоду служби");
-      }
-
-      if (period.endDate && !isAfter(period.endDate, period.startDate)) {
-        throw new Error(
-          "Дата закінчення періоду служби має бути пізнішою за дату початку"
-        );
-      }
-
-      if (hasContractStart && isAfter(period.startDate, input.contractStartDate)) {
-        throw new Error(
-          "Дата початку військової служби не може бути пізнішою за планову або фактичну дату підписання нового контракту"
-        );
-      }
-
-      if (
-        hasContractStart &&
-        period.endDate &&
-        !isBefore(period.endDate, input.contractStartDate)
-      ) {
-        throw new Error(
-          "Дата закінчення періоду служби має бути ранішою за планову або фактичну дату підписання нового контракту"
-        );
-      }
-    });
-
-    if (input.serviceStatus === ServiceStatus.ACTIVE) {
-      const openIndex = periods.findIndex(function (period) {
-        return !period.endDate;
+  if (input.serviceStatus === ServiceStatus.ACTIVE) {
+    if (hasSplitPeriods) {
+      validateBefore2022Period(input.servicePeriodBefore2022, {
+        required: true,
+        hasContractStart,
+        contractStartDate: input.contractStartDate,
       });
-      if (openIndex !== -1 && openIndex !== periods.length - 1) {
-        throw new Error(
-          "Період без дати закінчення має бути останнім у списку"
-        );
-      }
+      validateAfter2022Period(input.servicePeriodAfter2022, {
+        required: true,
+        endRequired: false,
+        hasContractStart,
+        contractStartDate: input.contractStartDate,
+      });
+    } else {
+      validateLegacyServicePeriods(input, hasContractStart);
     }
-
-    if (servicePeriodsOverlap(periods)) {
-      throw new Error("Періоди служби не повинні перетинатися");
+  } else if (input.serviceStatus === ServiceStatus.DISCHARGED) {
+    if (hasSplitPeriods || input.servicePeriodBefore2022) {
+      validateBefore2022Period(input.servicePeriodBefore2022, {
+        required: true,
+        hasContractStart,
+        contractStartDate: input.contractStartDate,
+      });
+    } else {
+      validateLegacyServicePeriods(input, hasContractStart);
     }
-  } else if (periods.length > 0 && hasContractStart) {
-    periods.forEach(function (period) {
+  } else if (normalizeServicePeriods(input).length > 0 && hasContractStart) {
+    normalizeServicePeriods(input).forEach(function (period) {
       if (isAfter(period.startDate, input.contractStartDate)) {
         throw new Error(
           "Дата початку військової служби не може бути пізнішою за планову або фактичну дату підписання нового контракту"
@@ -649,6 +644,171 @@ function validateInput(input) {
     throw new Error(
       "Кількість днів участі в бойових діях не може перевищувати 480"
     );
+  }
+}
+
+/**
+ * @param {ServicePeriod | undefined} period
+ * @param {{ required: boolean, hasContractStart: boolean, contractStartDate?: Date }} options
+ */
+function validateBefore2022Period(period, options) {
+  if (!period || !(period.startDate instanceof Date)) {
+    if (options.required) {
+      throw new Error("Вкажіть період служби до 24.02.2022");
+    }
+    return;
+  }
+
+  if (isBefore(period.startDate, EARLIEST_SERVICE_DATE)) {
+    throw new Error(
+      "Дата початку військової служби не може бути раніше 01.01.1950"
+    );
+  }
+
+  if (!(period.endDate instanceof Date)) {
+    throw new Error("Вкажіть дату закінчення періоду служби до 24.02.2022");
+  }
+
+  if (!isAfter(period.endDate, period.startDate)) {
+    throw new Error(
+      "Дата закінчення періоду служби має бути пізнішою за дату початку"
+    );
+  }
+
+  if (!isBefore(period.endDate, WAR_START_DATE)) {
+    throw new Error(
+      "Період служби до 24.02.2022 має завершитися до 24.02.2022"
+    );
+  }
+
+  if (options.hasContractStart && options.contractStartDate) {
+    if (isAfter(period.startDate, options.contractStartDate)) {
+      throw new Error(
+        "Дата початку військової служби не може бути пізнішою за планову або фактичну дату підписання нового контракту"
+      );
+    }
+  }
+}
+
+/**
+ * @param {ServicePeriod | undefined} period
+ * @param {{ required: boolean, endRequired: boolean, hasContractStart: boolean, contractStartDate?: Date }} options
+ */
+function validateAfter2022Period(period, options) {
+  if (!period || !(period.startDate instanceof Date)) {
+    if (options.required) {
+      throw new Error("Вкажіть період служби після 24.02.2022");
+    }
+    return;
+  }
+
+  if (isBefore(period.startDate, EARLIEST_SERVICE_DATE)) {
+    throw new Error(
+      "Дата початку військової служби не може бути раніше 01.01.1950"
+    );
+  }
+
+  if (isBefore(period.startDate, WAR_START_DATE)) {
+    throw new Error(
+      "Дата початку служби після 24.02.2022 не може бути раніше 24.02.2022"
+    );
+  }
+
+  if (options.endRequired && !(period.endDate instanceof Date)) {
+    throw new Error("Вкажіть дату закінчення періоду служби після 24.02.2022");
+  }
+
+  if (period.endDate && !isAfter(period.endDate, period.startDate)) {
+    throw new Error(
+      "Дата закінчення періоду служби має бути пізнішою за дату початку"
+    );
+  }
+
+  if (options.hasContractStart && options.contractStartDate) {
+    if (isAfter(period.startDate, options.contractStartDate)) {
+      throw new Error(
+        "Дата початку військової служби не може бути пізнішою за планову або фактичну дату підписання нового контракту"
+      );
+    }
+    if (
+      period.endDate &&
+      !isBefore(period.endDate, options.contractStartDate)
+    ) {
+      throw new Error(
+        "Дата закінчення періоду служби має бути ранішою за планову або фактичну дату підписання нового контракту"
+      );
+    }
+  }
+}
+
+/**
+ * @param {CalculatorInput} input
+ * @param {boolean} hasContractStart
+ */
+function validateLegacyServicePeriods(input, hasContractStart) {
+  const periods = normalizeServicePeriods(input);
+
+  if (periods.length === 0) {
+    throw new Error("Вкажіть дату початку військової служби");
+  }
+
+  if (periods.length > MAX_SERVICE_PERIODS) {
+    throw new Error(
+      "Можна вказати не більше " + MAX_SERVICE_PERIODS + " періодів служби"
+    );
+  }
+
+  periods.forEach(function (period, index) {
+    if (isBefore(period.startDate, EARLIEST_SERVICE_DATE)) {
+      throw new Error(
+        "Дата початку військової служби не може бути раніше 01.01.1950"
+      );
+    }
+
+    const isLast = index === periods.length - 1;
+    const needsEnd =
+      input.serviceStatus === ServiceStatus.DISCHARGED || !isLast;
+
+    if (needsEnd && !(period.endDate instanceof Date)) {
+      throw new Error("Вкажіть дату закінчення періоду служби");
+    }
+
+    if (period.endDate && !isAfter(period.endDate, period.startDate)) {
+      throw new Error(
+        "Дата закінчення періоду служби має бути пізнішою за дату початку"
+      );
+    }
+
+    if (hasContractStart && isAfter(period.startDate, input.contractStartDate)) {
+      throw new Error(
+        "Дата початку військової служби не може бути пізнішою за планову або фактичну дату підписання нового контракту"
+      );
+    }
+
+    if (
+      hasContractStart &&
+      period.endDate &&
+      !isBefore(period.endDate, input.contractStartDate)
+    ) {
+      throw new Error(
+        "Дата закінчення періоду служби має бути ранішою за планову або фактичну дату підписання нового контракту"
+      );
+    }
+  });
+
+  if (input.serviceStatus === ServiceStatus.ACTIVE) {
+    const openIndex = periods.findIndex(function (period) {
+      return !period.endDate;
+    });
+    if (openIndex !== -1 && openIndex !== periods.length - 1) {
+      throw new Error(
+        "Період без дати закінчення має бути останнім у списку"
+      );
+    }
+  }
+
+  if (servicePeriodsOverlap(periods)) {
+    throw new Error("Періоди служби не повинні перетинатися");
   }
 }
 
@@ -870,6 +1030,8 @@ function pluralUk(value, one, few, many) {
     normalizeServicePeriods,
     sumMonthsBefore2022,
     sumMonthsAfter2022,
+    resolveBefore2022Period,
+    resolveAfter2022Period,
     getRelevantServicePeriod,
     servicePeriodsOverlap,
     MAX_SERVICE_PERIODS,
