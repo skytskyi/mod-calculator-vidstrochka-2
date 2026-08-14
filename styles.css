@@ -1596,6 +1596,11 @@ body.mod-nav-open {
   gap: 12px;
 }
 
+.service-period__fields--single {
+  grid-template-columns: 1fr;
+  max-width: var(--radio-card-width);
+}
+
 .service-period__end {
   display: flex;
   flex-direction: column;
@@ -1622,6 +1627,10 @@ body.mod-nav-open {
   .service-period__fields {
     grid-template-columns: 1fr 1fr;
     gap: 16px;
+  }
+
+  .service-period__fields--single {
+    grid-template-columns: 1fr;
   }
 }
 

@@ -471,7 +471,8 @@ function calculate(input) {
     monthsAfter2022 = calculateMonthsAfter2022(
       afterPeriod.startDate,
       serviceAnchorDate,
-      afterPeriod.endDate
+      // Explicit after-2022 period is ongoing until the new contract.
+      input.servicePeriodAfter2022 ? undefined : afterPeriod.endDate
     );
     after2022Contribution = calculateAfter2022Contribution(monthsAfter2022);
   }
@@ -608,7 +609,6 @@ function validateInput(input) {
       });
       validateAfter2022Period(input.servicePeriodAfter2022, {
         required: true,
-        endRequired: false,
         hasContractStart,
         contractStartDate: input.contractStartDate,
       });
@@ -692,7 +692,7 @@ function validateBefore2022Period(period, options) {
 
 /**
  * @param {ServicePeriod | undefined} period
- * @param {{ required: boolean, endRequired: boolean, hasContractStart: boolean, contractStartDate?: Date }} options
+ * @param {{ required: boolean, hasContractStart: boolean, contractStartDate?: Date }} options
  */
 function validateAfter2022Period(period, options) {
   if (!period || !(period.startDate instanceof Date)) {
@@ -714,28 +714,10 @@ function validateAfter2022Period(period, options) {
     );
   }
 
-  if (options.endRequired && !(period.endDate instanceof Date)) {
-    throw new Error("Вкажіть дату закінчення періоду служби після 24.02.2022");
-  }
-
-  if (period.endDate && !isAfter(period.endDate, period.startDate)) {
-    throw new Error(
-      "Дата закінчення періоду служби має бути пізнішою за дату початку"
-    );
-  }
-
   if (options.hasContractStart && options.contractStartDate) {
     if (isAfter(period.startDate, options.contractStartDate)) {
       throw new Error(
         "Дата початку військової служби не може бути пізнішою за планову або фактичну дату підписання нового контракту"
-      );
-    }
-    if (
-      period.endDate &&
-      !isBefore(period.endDate, options.contractStartDate)
-    ) {
-      throw new Error(
-        "Дата закінчення періоду служби має бути ранішою за планову або фактичну дату підписання нового контракту"
       );
     }
   }

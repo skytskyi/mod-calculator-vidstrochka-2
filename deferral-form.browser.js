@@ -159,11 +159,14 @@ function readPeriodByKind(kind) {
   const startInput = row.querySelector('[data-period-field="start"]');
   const endInput = row.querySelector('[data-period-field="end"]');
   const startDate = parseDateValue(startInput && startInput.value);
-  const endDate = parseDateValue(endInput && endInput.value);
   if (!startDate) return null;
   /** @type {{ startDate: Date, endDate?: Date }} */
   const period = { startDate };
-  if (endDate) period.endDate = endDate;
+  // After-2022 period never has an end date in the UI.
+  if (kind === PERIOD_KIND_BEFORE) {
+    const endDate = parseDateValue(endInput && endInput.value);
+    if (endDate) period.endDate = endDate;
+  }
   return period;
 }
 
@@ -220,7 +223,6 @@ function createServicePeriodRow(kind) {
   head.appendChild(title);
 
   const startId = "service-period-" + kind + "-start";
-  const endId = "service-period-" + kind + "-end";
   const dateOpts =
     kind === PERIOD_KIND_BEFORE
       ? { min: EARLIEST_SERVICE_DATE_VALUE, max: DAY_BEFORE_WAR_ISO }
@@ -235,25 +237,27 @@ function createServicePeriodRow(kind) {
   startField.appendChild(startLabel);
   startField.appendChild(createDateField(startId, "start", dateOpts));
 
-  const endField = document.createElement("div");
-  endField.className = "field field--date service-period__end";
-  const endLabel = document.createElement("label");
-  endLabel.className = "field__legend";
-  endLabel.htmlFor = endId;
-  endLabel.textContent = "Дата звільнення з військової служби";
-  endField.appendChild(endLabel);
-  endField.appendChild(createDateField(endId, "end", dateOpts));
-
-  const hint = document.createElement("p");
-  hint.className = "field__hint service-period__hint";
-  hint.hidden = kind !== PERIOD_KIND_AFTER;
-  hint.textContent = "Залиште порожнім, якщо служите";
-  endField.appendChild(hint);
-
   const fields = document.createElement("div");
-  fields.className = "service-period__fields";
+  fields.className =
+    kind === PERIOD_KIND_AFTER
+      ? "service-period__fields service-period__fields--single"
+      : "service-period__fields";
   fields.appendChild(startField);
-  fields.appendChild(endField);
+
+  // After-2022 period for active service has no discharge date:
+  // end is always the new contract date (or today) in the formula.
+  if (kind === PERIOD_KIND_BEFORE) {
+    const endId = "service-period-" + kind + "-end";
+    const endField = document.createElement("div");
+    endField.className = "field field--date service-period__end";
+    const endLabel = document.createElement("label");
+    endLabel.className = "field__legend";
+    endLabel.htmlFor = endId;
+    endLabel.textContent = "Дата звільнення з військової служби";
+    endField.appendChild(endLabel);
+    endField.appendChild(createDateField(endId, "end", dateOpts));
+    fields.appendChild(endField);
+  }
 
   row.appendChild(head);
   row.appendChild(fields);
@@ -261,16 +265,7 @@ function createServicePeriodRow(kind) {
 }
 
 function syncServicePeriodUi() {
-  const status = getSelectedServiceStatus();
-  getServicePeriodRows().forEach(function (row) {
-    const kind = row.dataset.periodKind;
-    const hint = row.querySelector(".service-period__hint");
-    if (hint) {
-      hint.hidden = !(
-        kind === PERIOD_KIND_AFTER && status === ServiceStatus.ACTIVE
-      );
-    }
-  });
+  // Structure is fixed per status; nothing dynamic to sync for now.
 }
 
 function clearServicePeriods() {
@@ -296,18 +291,15 @@ function ensureServicePeriods() {
   const hasAfter = !!existingAfter;
 
   if (hasBefore === wantBefore && hasAfter === wantAfter) {
-    // Keep DOM order: before first, after second.
     if (wantBefore && wantAfter && existingBefore && existingAfter) {
       const children = getServicePeriodRows();
       if (
         children.length === 2 &&
         children[0].dataset.periodKind === PERIOD_KIND_BEFORE
       ) {
-        syncServicePeriodUi();
         return;
       }
     } else {
-      syncServicePeriodUi();
       return;
     }
   }
@@ -315,13 +307,13 @@ function ensureServicePeriods() {
   const beforeValues = existingBefore
     ? {
         start: existingBefore.querySelector('[data-period-field="start"]').value,
-        end: existingBefore.querySelector('[data-period-field="end"]').value,
+        end: (existingBefore.querySelector('[data-period-field="end"]') || {})
+          .value,
       }
     : null;
   const afterValues = existingAfter
     ? {
         start: existingAfter.querySelector('[data-period-field="start"]').value,
-        end: existingAfter.querySelector('[data-period-field="end"]').value,
       }
     : null;
 
@@ -337,7 +329,7 @@ function ensureServicePeriods() {
         startInput.value = beforeValues.start;
         syncDateFieldState(startInput);
       }
-      if (endInput) {
+      if (endInput && beforeValues.end) {
         endInput.value = beforeValues.end;
         syncDateFieldState(endInput);
       }
@@ -349,19 +341,12 @@ function ensureServicePeriods() {
     servicePeriodsList.appendChild(row);
     if (afterValues) {
       const startInput = row.querySelector('[data-period-field="start"]');
-      const endInput = row.querySelector('[data-period-field="end"]');
       if (startInput) {
         startInput.value = afterValues.start;
         syncDateFieldState(startInput);
       }
-      if (endInput) {
-        endInput.value = afterValues.end;
-        syncDateFieldState(endInput);
-      }
     }
   }
-
-  syncServicePeriodUi();
 }
 
 /**
@@ -1189,12 +1174,9 @@ function collectInputSummaryRows(result) {
   }
 
   if (afterPeriod) {
-    const endLabel = afterPeriod.endDate
-      ? formatDisplayDate(afterPeriod.endDate)
-      : "досі служить";
     rows.push({
       label: TITLE_AFTER,
-      value: formatDisplayDate(afterPeriod.startDate) + " – " + endLabel,
+      value: "з " + formatDisplayDate(afterPeriod.startDate),
     });
   }
 
