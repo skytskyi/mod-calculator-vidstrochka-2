@@ -20,7 +20,12 @@ const combatDaysField = document.getElementById("field-combat-days");
 const combatAssignmentField = document.getElementById("field-combat-assignment");
 const combatDaysInput = document.getElementById("combat-days-input");
 const servicePeriodsField = document.getElementById("field-service-periods");
-const servicePeriodsList = document.getElementById("service-periods-list");
+const servicePeriodsAfterList = document.getElementById(
+  "service-periods-after-list"
+);
+const servicePeriodsBeforeList = document.getElementById(
+  "service-periods-before-list"
+);
 const serviceBeforeToggle = document.getElementById("service-before-toggle");
 const contractTermField = document.getElementById("field-contract-term");
 const contractStartLabel = document.getElementById("contract-start-label");
@@ -144,18 +149,33 @@ const TITLE_AFTER =
 const WAR_START_ISO = "2022-02-24";
 const DAY_BEFORE_WAR_ISO = "2022-02-23";
 
+function getPeriodListForKind(kind) {
+  return kind === PERIOD_KIND_BEFORE
+    ? servicePeriodsBeforeList
+    : servicePeriodsAfterList;
+}
+
 function getServicePeriodRows() {
-  if (!servicePeriodsList) return [];
-  return Array.prototype.slice.call(
-    servicePeriodsList.querySelectorAll(".service-period")
-  );
+  const rows = [];
+  if (servicePeriodsAfterList) {
+    rows.push.apply(
+      rows,
+      servicePeriodsAfterList.querySelectorAll(".service-period")
+    );
+  }
+  if (servicePeriodsBeforeList) {
+    rows.push.apply(
+      rows,
+      servicePeriodsBeforeList.querySelectorAll(".service-period")
+    );
+  }
+  return rows;
 }
 
 function getServicePeriodRowByKind(kind) {
-  if (!servicePeriodsList) return null;
-  return servicePeriodsList.querySelector(
-    '.service-period[data-period-kind="' + kind + '"]'
-  );
+  const list = getPeriodListForKind(kind);
+  if (!list) return null;
+  return list.querySelector('.service-period[data-period-kind="' + kind + '"]');
 }
 
 /**
@@ -303,16 +323,11 @@ function captureBeforePeriodValues() {
 }
 
 function ensureBeforePeriodRow() {
-  if (!servicePeriodsList) return;
+  if (!servicePeriodsBeforeList) return;
   let beforeRow = getServicePeriodRowByKind(PERIOD_KIND_BEFORE);
   if (!beforeRow) {
     beforeRow = createServicePeriodRow(PERIOD_KIND_BEFORE);
-    const afterRow = getServicePeriodRowByKind(PERIOD_KIND_AFTER);
-    if (afterRow) {
-      servicePeriodsList.insertBefore(beforeRow, afterRow);
-    } else {
-      servicePeriodsList.appendChild(beforeRow);
-    }
+    servicePeriodsBeforeList.appendChild(beforeRow);
     fillPeriodInputs(beforeRow, preservedBeforePeriodValues);
   }
 }
@@ -325,15 +340,20 @@ function removeBeforePeriodRow() {
 }
 
 function ensureAfterPeriodRow() {
-  if (!servicePeriodsList) return;
+  if (!servicePeriodsAfterList) return;
   if (getServicePeriodRowByKind(PERIOD_KIND_AFTER)) return;
-  servicePeriodsList.appendChild(createServicePeriodRow(PERIOD_KIND_AFTER));
+  servicePeriodsAfterList.appendChild(createServicePeriodRow(PERIOD_KIND_AFTER));
+}
+
+function removeAfterPeriodRow() {
+  const row = getServicePeriodRowByKind(PERIOD_KIND_AFTER);
+  if (row) row.remove();
 }
 
 function clearServicePeriods() {
-  if (!servicePeriodsList) return;
   captureBeforePeriodValues();
-  servicePeriodsList.replaceChildren();
+  if (servicePeriodsAfterList) servicePeriodsAfterList.replaceChildren();
+  if (servicePeriodsBeforeList) servicePeriodsBeforeList.replaceChildren();
 }
 
 function fillPeriodInputs(row, values) {
@@ -359,7 +379,6 @@ function syncBeforePeriodFromToggle() {
 }
 
 function ensureServicePeriods() {
-  if (!servicePeriodsList) return;
   const status = getSelectedServiceStatus();
 
   if (status !== ServiceStatus.ACTIVE && status !== ServiceStatus.DISCHARGED) {
@@ -368,33 +387,15 @@ function ensureServicePeriods() {
     return;
   }
 
-  const existingBefore = getServicePeriodRowByKind(PERIOD_KIND_BEFORE);
-  if (existingBefore && !isBeforePeriodEnabled()) {
-    setBeforePeriodEnabled(true);
-  }
-
   if (status === ServiceStatus.DISCHARGED) {
-    const afterRow = getServicePeriodRowByKind(PERIOD_KIND_AFTER);
-    if (afterRow) afterRow.remove();
+    removeAfterPeriodRow();
     syncBeforePeriodFromToggle();
     return;
   }
 
-  // ACTIVE: after required; before optional via toggle.
+  // ACTIVE: after first, then toggle-controlled before.
   ensureAfterPeriodRow();
   syncBeforePeriodFromToggle();
-
-  const beforeRow = getServicePeriodRowByKind(PERIOD_KIND_BEFORE);
-  const afterRow = getServicePeriodRowByKind(PERIOD_KIND_AFTER);
-  if (beforeRow && afterRow) {
-    const children = getServicePeriodRows();
-    if (
-      children.length >= 2 &&
-      children[0].dataset.periodKind !== PERIOD_KIND_BEFORE
-    ) {
-      servicePeriodsList.insertBefore(beforeRow, afterRow);
-    }
-  }
 }
 
 /**
@@ -1122,7 +1123,8 @@ function clearWizardForm() {
   }
 
   setBeforePeriodEnabled(false);
-  if (servicePeriodsList) servicePeriodsList.replaceChildren();
+  if (servicePeriodsAfterList) servicePeriodsAfterList.replaceChildren();
+  if (servicePeriodsBeforeList) servicePeriodsBeforeList.replaceChildren();
   preservedBeforePeriodValues = null;
   syncStatusFields();
   syncCombatFields();

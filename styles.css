@@ -1620,10 +1620,20 @@ body.mod-nav-open {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin: 0 0 24px;
+  margin: 0;
   padding: 0;
   cursor: pointer;
   user-select: none;
+}
+
+.service-periods__after:not(:empty) + .switch-field {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px dotted rgb(107 107 107);
+}
+
+.switch-field + .service-periods__before:not(:empty) {
+  margin-top: 24px;
 }
 
 .switch-field__text {
