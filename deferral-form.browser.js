@@ -136,8 +136,9 @@ const PERIOD_KIND_BEFORE = "before";
 const PERIOD_KIND_AFTER = "after";
 const TITLE_BEFORE =
   "Останній безперервний період служби до 24.02.2022";
-const TITLE_AFTER =
-  "Останній безперервний період служби після 24.02.2022";
+const LABEL_AFTER_START =
+  "Дата початку військової служби (починаючи з 24.02.2022)";
+const LABEL_BEFORE_START = "Дата початку військової служби";
 const WAR_START_ISO = "2022-02-24";
 const DAY_BEFORE_WAR_ISO = "2022-02-23";
 
@@ -234,14 +235,16 @@ function createServicePeriodRow(kind) {
   row.dataset.periodKind = kind;
   row.id = "service-period-" + kind;
 
-  const head = document.createElement("div");
-  head.className = "service-period__head";
+  if (kind === PERIOD_KIND_BEFORE) {
+    const head = document.createElement("div");
+    head.className = "service-period__head";
 
-  const title = document.createElement("p");
-  title.className = "service-period__title";
-  title.textContent =
-    kind === PERIOD_KIND_BEFORE ? TITLE_BEFORE : TITLE_AFTER;
-  head.appendChild(title);
+    const title = document.createElement("p");
+    title.className = "service-period__title";
+    title.textContent = TITLE_BEFORE;
+    head.appendChild(title);
+    row.appendChild(head);
+  }
 
   const startId = "service-period-" + kind + "-start";
   const dateOpts =
@@ -254,7 +257,8 @@ function createServicePeriodRow(kind) {
   const startLabel = document.createElement("label");
   startLabel.className = "field__legend";
   startLabel.htmlFor = startId;
-  startLabel.textContent = "Дата початку військової служби";
+  startLabel.textContent =
+    kind === PERIOD_KIND_AFTER ? LABEL_AFTER_START : LABEL_BEFORE_START;
   startField.appendChild(startLabel);
   startField.appendChild(createDateField(startId, "start", dateOpts));
 
@@ -280,7 +284,6 @@ function createServicePeriodRow(kind) {
     fields.appendChild(endField);
   }
 
-  row.appendChild(head);
   row.appendChild(fields);
   return row;
 }
@@ -1223,8 +1226,8 @@ function collectInputSummaryRows(result) {
 
   if (afterPeriod) {
     rows.push({
-      label: TITLE_AFTER,
-      value: "з " + formatDisplayDate(afterPeriod.startDate),
+      label: LABEL_AFTER_START,
+      value: formatDisplayDate(afterPeriod.startDate),
     });
   }
 
