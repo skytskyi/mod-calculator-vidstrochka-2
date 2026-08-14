@@ -88,18 +88,22 @@
                         id="field-service-periods"
                         hidden
                       >
+                        <label class="switch-field" id="service-before-toggle-wrap">
+                          <span class="switch-field__text"
+                            >Мав безперервний період служби до 24.02.2022</span
+                          >
+                          <input
+                            type="checkbox"
+                            class="switch-field__input"
+                            id="service-before-toggle"
+                            name="hadServiceBefore2022"
+                          />
+                          <span class="switch-field__ui" aria-hidden="true"></span>
+                        </label>
                         <div
                           class="service-periods__list"
                           id="service-periods-list"
                         ></div>
-                        <button
-                          type="button"
-                          class="btn-text service-periods__add"
-                          id="service-period-add-before"
-                          hidden
-                        >
-                          Додати період служби до 24.02.2022
-                        </button>
                       </div>
                     </div>
 

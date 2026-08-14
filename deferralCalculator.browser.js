@@ -618,11 +618,11 @@ function validateInput(input) {
   } else if (input.serviceStatus === ServiceStatus.DISCHARGED) {
     if (hasSplitPeriods || input.servicePeriodBefore2022) {
       validateBefore2022Period(input.servicePeriodBefore2022, {
-        required: true,
+        required: false,
         hasContractStart,
         contractStartDate: input.contractStartDate,
       });
-    } else {
+    } else if (normalizeServicePeriods(input).length > 0) {
       validateLegacyServicePeriods(input, hasContractStart);
     }
   } else if (normalizeServicePeriods(input).length > 0 && hasContractStart) {

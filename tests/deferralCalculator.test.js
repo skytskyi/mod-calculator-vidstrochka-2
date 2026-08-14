@@ -294,6 +294,20 @@ describe("split before/after service periods", () => {
     expect(result.totalDeferralMonths).toBeGreaterThan(6);
   });
 
+  it("allows discharged combat without before-2022 period", () => {
+    const result = calculate({
+      serviceStatus: ServiceStatus.DISCHARGED,
+      contractType: ContractType.COMBAT,
+      contractStartDate: new Date(2026, 8, 1),
+      combatDays: 0,
+    });
+
+    expect(result.contractTermMonths).toBe(24);
+    expect(result.monthsBefore2022).toBe(0);
+    expect(result.monthsAfter2022).toBe(0);
+    expect(result.totalDeferralMonths).toBe(6);
+  });
+
   it("for discharged combat uses before period and ignores unused after absence", () => {
     const result = calculate({
       serviceStatus: ServiceStatus.DISCHARGED,
