@@ -601,7 +601,7 @@ function validateInput(input) {
   if (input.serviceStatus === ServiceStatus.ACTIVE) {
     if (hasSplitPeriods) {
       validateBefore2022Period(input.servicePeriodBefore2022, {
-        required: true,
+        required: false,
         hasContractStart,
         contractStartDate: input.contractStartDate,
       });

@@ -257,6 +257,22 @@ describe("validation and optional contract date", () => {
 });
 
 describe("split before/after service periods", () => {
+  it("allows active assault with only after-2022 period", () => {
+    const result = calculate({
+      serviceStatus: ServiceStatus.ACTIVE,
+      contractType: ContractType.ASSAULT,
+      servicePeriodAfter2022: {
+        startDate: new Date(2023, 0, 1),
+      },
+      contractStartDate: new Date(2024, 5, 1),
+      combatDays: 0,
+    });
+
+    expect(result.contractTermMonths).toBe(10);
+    expect(result.monthsBefore2022).toBe(0);
+    expect(result.monthsAfter2022).toBeGreaterThan(0);
+  });
+
   it("uses explicit before/after periods for active assault (term 10)", () => {
     const result = calculate({
       serviceStatus: ServiceStatus.ACTIVE,

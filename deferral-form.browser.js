@@ -13,6 +13,9 @@ const combatAssignmentField = document.getElementById("field-combat-assignment")
 const combatDaysInput = document.getElementById("combat-days-input");
 const servicePeriodsField = document.getElementById("field-service-periods");
 const servicePeriodsList = document.getElementById("service-periods-list");
+const servicePeriodAddBeforeBtn = document.getElementById(
+  "service-period-add-before"
+);
 const contractTermField = document.getElementById("field-contract-term");
 const contractStartLabel = document.getElementById("contract-start-label");
 const contractTermAssault = document.getElementById("contract-term-assault");
@@ -206,8 +209,10 @@ function createDateField(inputId, fieldName, options) {
 
 /**
  * @param {'before' | 'after'} kind
+ * @param {{ removable?: boolean }} [options]
  */
-function createServicePeriodRow(kind) {
+function createServicePeriodRow(kind, options) {
+  const removable = !!(options && options.removable);
   const row = document.createElement("div");
   row.className = "service-period";
   row.dataset.periodKind = kind;
@@ -221,6 +226,17 @@ function createServicePeriodRow(kind) {
   title.textContent =
     kind === PERIOD_KIND_BEFORE ? TITLE_BEFORE : TITLE_AFTER;
   head.appendChild(title);
+
+  if (removable) {
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "btn-text service-period__remove";
+    removeBtn.textContent = "Видалити";
+    removeBtn.addEventListener("click", function () {
+      removeBeforeServicePeriod();
+    });
+    head.appendChild(removeBtn);
+  }
 
   const startId = "service-period-" + kind + "-start";
   const dateOpts =
@@ -264,44 +280,120 @@ function createServicePeriodRow(kind) {
   return row;
 }
 
-function syncServicePeriodUi() {
-  // Structure is fixed per status; nothing dynamic to sync for now.
+function syncBeforePeriodAddButton() {
+  if (!servicePeriodAddBeforeBtn) return;
+  const status = getSelectedServiceStatus();
+  const showAdd =
+    status === ServiceStatus.ACTIVE && !getServicePeriodRowByKind(PERIOD_KIND_BEFORE);
+  servicePeriodAddBeforeBtn.hidden = !showAdd;
+}
+
+function addBeforeServicePeriod() {
+  if (!servicePeriodsList) return;
+  if (getSelectedServiceStatus() !== ServiceStatus.ACTIVE) return;
+  if (getServicePeriodRowByKind(PERIOD_KIND_BEFORE)) return;
+
+  const afterRow = getServicePeriodRowByKind(PERIOD_KIND_AFTER);
+  const beforeRow = createServicePeriodRow(PERIOD_KIND_BEFORE, {
+    removable: true,
+  });
+  if (afterRow) {
+    servicePeriodsList.insertBefore(beforeRow, afterRow);
+  } else {
+    servicePeriodsList.appendChild(beforeRow);
+  }
+  syncBeforePeriodAddButton();
+  onWizardInputChange();
+}
+
+function removeBeforeServicePeriod() {
+  const row = getServicePeriodRowByKind(PERIOD_KIND_BEFORE);
+  if (!row) return;
+  row.remove();
+  syncBeforePeriodAddButton();
+  onWizardInputChange();
 }
 
 function clearServicePeriods() {
   if (!servicePeriodsList) return;
   servicePeriodsList.replaceChildren();
+  syncBeforePeriodAddButton();
+}
+
+function fillPeriodInputs(row, values) {
+  if (!row || !values) return;
+  const startInput = row.querySelector('[data-period-field="start"]');
+  const endInput = row.querySelector('[data-period-field="end"]');
+  if (startInput && values.start) {
+    startInput.value = values.start;
+    syncDateFieldState(startInput);
+  }
+  if (endInput && values.end) {
+    endInput.value = values.end;
+    syncDateFieldState(endInput);
+  }
 }
 
 function ensureServicePeriods() {
   if (!servicePeriodsList) return;
   const status = getSelectedServiceStatus();
-  const wantBefore =
-    status === ServiceStatus.ACTIVE || status === ServiceStatus.DISCHARGED;
-  const wantAfter = status === ServiceStatus.ACTIVE;
 
-  if (!wantBefore && !wantAfter) {
+  if (status !== ServiceStatus.ACTIVE && status !== ServiceStatus.DISCHARGED) {
     clearServicePeriods();
     return;
   }
 
   const existingBefore = getServicePeriodRowByKind(PERIOD_KIND_BEFORE);
   const existingAfter = getServicePeriodRowByKind(PERIOD_KIND_AFTER);
-  const hasBefore = !!existingBefore;
-  const hasAfter = !!existingAfter;
 
-  if (hasBefore === wantBefore && hasAfter === wantAfter) {
-    if (wantBefore && wantAfter && existingBefore && existingAfter) {
-      const children = getServicePeriodRows();
-      if (
-        children.length === 2 &&
-        children[0].dataset.periodKind === PERIOD_KIND_BEFORE
-      ) {
-        return;
-      }
-    } else {
+  if (status === ServiceStatus.DISCHARGED) {
+    if (existingBefore && !existingAfter) {
+      const removeBtn = existingBefore.querySelector(".service-period__remove");
+      if (removeBtn) removeBtn.remove();
+      syncBeforePeriodAddButton();
       return;
     }
+
+    const preservedBefore = existingBefore
+      ? {
+          start: existingBefore.querySelector('[data-period-field="start"]').value,
+          end: (existingBefore.querySelector('[data-period-field="end"]') || {})
+            .value,
+        }
+      : null;
+
+    clearServicePeriods();
+    const row = createServicePeriodRow(PERIOD_KIND_BEFORE, { removable: false });
+    servicePeriodsList.appendChild(row);
+    fillPeriodInputs(row, preservedBefore);
+    syncBeforePeriodAddButton();
+    return;
+  }
+
+  // ACTIVE: after required; before optional.
+  if (existingAfter) {
+    if (existingBefore) {
+      const head = existingBefore.querySelector(".service-period__head");
+      if (head && !head.querySelector(".service-period__remove")) {
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "btn-text service-period__remove";
+        removeBtn.textContent = "Видалити";
+        removeBtn.addEventListener("click", function () {
+          removeBeforeServicePeriod();
+        });
+        head.appendChild(removeBtn);
+      }
+      const children = getServicePeriodRows();
+      if (
+        children.length >= 2 &&
+        children[0].dataset.periodKind !== PERIOD_KIND_BEFORE
+      ) {
+        servicePeriodsList.insertBefore(existingBefore, existingAfter);
+      }
+    }
+    syncBeforePeriodAddButton();
+    return;
   }
 
   const beforeValues = existingBefore
@@ -311,42 +403,20 @@ function ensureServicePeriods() {
           .value,
       }
     : null;
-  const afterValues = existingAfter
-    ? {
-        start: existingAfter.querySelector('[data-period-field="start"]').value,
-      }
-    : null;
 
   clearServicePeriods();
 
-  if (wantBefore) {
-    const row = createServicePeriodRow(PERIOD_KIND_BEFORE);
-    servicePeriodsList.appendChild(row);
-    if (beforeValues) {
-      const startInput = row.querySelector('[data-period-field="start"]');
-      const endInput = row.querySelector('[data-period-field="end"]');
-      if (startInput) {
-        startInput.value = beforeValues.start;
-        syncDateFieldState(startInput);
-      }
-      if (endInput && beforeValues.end) {
-        endInput.value = beforeValues.end;
-        syncDateFieldState(endInput);
-      }
-    }
+  if (beforeValues) {
+    const beforeRow = createServicePeriodRow(PERIOD_KIND_BEFORE, {
+      removable: true,
+    });
+    servicePeriodsList.appendChild(beforeRow);
+    fillPeriodInputs(beforeRow, beforeValues);
   }
 
-  if (wantAfter) {
-    const row = createServicePeriodRow(PERIOD_KIND_AFTER);
-    servicePeriodsList.appendChild(row);
-    if (afterValues) {
-      const startInput = row.querySelector('[data-period-field="start"]');
-      if (startInput) {
-        startInput.value = afterValues.start;
-        syncDateFieldState(startInput);
-      }
-    }
-  }
+  const afterRow = createServicePeriodRow(PERIOD_KIND_AFTER);
+  servicePeriodsList.appendChild(afterRow);
+  syncBeforePeriodAddButton();
 }
 
 /**
@@ -547,10 +617,14 @@ function getCurrentStepId() {
 
 function areServicePeriodsFilled(status) {
   if (status === ServiceStatus.ACTIVE) {
-    const before = readPeriodByKind(PERIOD_KIND_BEFORE);
     const after = readPeriodByKind(PERIOD_KIND_AFTER);
-    if (!before || !before.startDate || !before.endDate) return false;
     if (!after || !after.startDate) return false;
+
+    const beforeRow = getServicePeriodRowByKind(PERIOD_KIND_BEFORE);
+    if (beforeRow) {
+      const before = readPeriodByKind(PERIOD_KIND_BEFORE);
+      if (!before || !before.startDate || !before.endDate) return false;
+    }
     return true;
   }
 
@@ -1464,7 +1538,7 @@ function buildInput() {
     input.combatUnitType = combatUnitType;
   }
 
-  if (beforePeriod) {
+  if (beforePeriod && beforePeriod.endDate) {
     input.servicePeriodBefore2022 = beforePeriod;
   }
 
@@ -1556,6 +1630,12 @@ if (wizardRestart) {
 
 if (wizardEdit) {
   wizardEdit.addEventListener("click", returnToWizard);
+}
+
+if (servicePeriodAddBeforeBtn) {
+  servicePeriodAddBeforeBtn.addEventListener("click", function () {
+    addBeforeServicePeriod();
+  });
 }
 
 bindStepper("combat-days-input", "combat-days-dec", "combat-days-inc", 0, MAX_COMBAT_DAYS);
