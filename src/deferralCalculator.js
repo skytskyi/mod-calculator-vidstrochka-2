@@ -613,7 +613,10 @@ function validateInput(input) {
     } else {
       validateLegacyServicePeriods(input, hasContractStart);
     }
-  } else if (input.serviceStatus === ServiceStatus.DISCHARGED) {
+  } else if (
+    input.serviceStatus === ServiceStatus.DISCHARGED ||
+    input.serviceStatus === ServiceStatus.OBLIGATED
+  ) {
     if (hasSplitPeriods || input.servicePeriodBefore2022) {
       validateBefore2022Period(input.servicePeriodBefore2022, {
         required: false,

@@ -308,6 +308,40 @@ describe("split before/after service periods", () => {
     expect(result.totalDeferralMonths).toBe(6);
   });
 
+  it("for obligated combat uses optional before-2022 period (term 24)", () => {
+    const result = calculate({
+      serviceStatus: ServiceStatus.OBLIGATED,
+      contractType: ContractType.COMBAT,
+      servicePeriodBefore2022: {
+        startDate: new Date(2015, 0, 1),
+        endDate: new Date(2020, 0, 1),
+      },
+      contractStartDate: new Date(2026, 8, 1),
+      combatDays: 0,
+    });
+
+    expect(result.contractTermMonths).toBe(24);
+    expect(result.monthsBefore2022).toBe(60);
+    expect(result.totalDeferralMonths).toBe(6 + Math.floor(60 / 12) + 1);
+  });
+
+  it("for obligated assault ignores before-2022 period (term 14)", () => {
+    const result = calculate({
+      serviceStatus: ServiceStatus.OBLIGATED,
+      contractType: ContractType.ASSAULT,
+      servicePeriodBefore2022: {
+        startDate: new Date(2015, 0, 1),
+        endDate: new Date(2020, 0, 1),
+      },
+      contractStartDate: new Date(2026, 8, 1),
+      combatDays: 0,
+    });
+
+    expect(result.contractTermMonths).toBe(14);
+    expect(result.monthsBefore2022).toBe(0);
+    expect(result.totalDeferralMonths).toBe(6);
+  });
+
   it("for discharged combat uses before period and ignores unused after absence", () => {
     const result = calculate({
       serviceStatus: ServiceStatus.DISCHARGED,

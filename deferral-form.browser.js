@@ -129,7 +129,11 @@ function parseIntegerInput(id) {
 }
 
 function requiresServicePeriods(status) {
-  return status === ServiceStatus.ACTIVE || status === ServiceStatus.DISCHARGED;
+  return (
+    status === ServiceStatus.ACTIVE ||
+    status === ServiceStatus.DISCHARGED ||
+    status === ServiceStatus.OBLIGATED
+  );
 }
 
 const PERIOD_KIND_BEFORE = "before";
@@ -376,13 +380,21 @@ function syncBeforePeriodFromToggle() {
 function ensureServicePeriods() {
   const status = getSelectedServiceStatus();
 
-  if (status !== ServiceStatus.ACTIVE && status !== ServiceStatus.DISCHARGED) {
+  if (
+    status !== ServiceStatus.ACTIVE &&
+    status !== ServiceStatus.DISCHARGED &&
+    status !== ServiceStatus.OBLIGATED
+  ) {
     setBeforePeriodEnabled(false);
     clearServicePeriods();
     return;
   }
 
-  if (status === ServiceStatus.DISCHARGED) {
+  // OBLIGATED / DISCHARGED: only optional before-2022 via toggle.
+  if (
+    status === ServiceStatus.DISCHARGED ||
+    status === ServiceStatus.OBLIGATED
+  ) {
     removeAfterPeriodRow();
     syncBeforePeriodFromToggle();
     return;
@@ -601,7 +613,10 @@ function areServicePeriodsFilled(status) {
     return true;
   }
 
-  if (status === ServiceStatus.DISCHARGED) {
+  if (
+    status === ServiceStatus.DISCHARGED ||
+    status === ServiceStatus.OBLIGATED
+  ) {
     if (!isBeforePeriodEnabled()) return true;
     const before = readPeriodByKind(PERIOD_KIND_BEFORE);
     return !!(before && before.startDate && before.endDate);
