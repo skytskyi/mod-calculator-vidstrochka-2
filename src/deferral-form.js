@@ -148,7 +148,7 @@ const PERIOD_KIND_AFTER = "after";
 const TITLE_BEFORE =
   "Останній безперервний період служби до 24.02.2022";
 const LABEL_AFTER_START =
-  "Дата початку військової служби ( з 24.02.2022)";
+  "Дата початку військової служби (з 24.02.2022)";
 const LABEL_BEFORE_START = "Дата початку військової служби";
 const WAR_START_ISO = "2022-02-24";
 const DAY_BEFORE_WAR_ISO = "2022-02-23";
