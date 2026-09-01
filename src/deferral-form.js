@@ -27,6 +27,9 @@ const servicePeriodsBeforeList = document.getElementById(
   "service-periods-before-list"
 );
 const serviceBeforeToggle = document.getElementById("service-before-toggle");
+const contractStartField = document.getElementById("field-contract-start");
+const wizardStepContract = document.getElementById("wizard-step-contract");
+const wizardStepCombat = document.getElementById("wizard-step-combat");
 const contractTermField = document.getElementById("field-contract-term");
 const contractStartLabel = document.getElementById("contract-start-label");
 const contractTermAssault = document.getElementById("contract-term-assault");
@@ -492,10 +495,53 @@ function clearCombatUnitSelection() {
 }
 
 function getCombatStepMeta() {
+  if (getSelectedServiceStatus() === ServiceStatus.OBLIGATED) {
+    return {
+      title: CONTRACT_START_LABELS.obligated,
+      help:
+        "Дату підписання можна не вказувати — тоді система порахує лише строк відстрочки.",
+    };
+  }
+
   return {
     title: STEP_META.combat.title,
     help: STEP_META.combat.help,
   };
+}
+
+function getContractStepMeta() {
+  if (getSelectedServiceStatus() === ServiceStatus.OBLIGATED) {
+    return {
+      title: STEP_META.contract.title,
+      help: "Оберіть тип контракту.",
+    };
+  }
+
+  return {
+    title: STEP_META.contract.title,
+    help: STEP_META.contract.help,
+  };
+}
+
+function showsCombatDays(status) {
+  return status !== ServiceStatus.OBLIGATED;
+}
+
+function placesContractStartOnCombatStep(status) {
+  return status === ServiceStatus.OBLIGATED;
+}
+
+function syncContractStartFieldPlacement() {
+  if (!contractStartField || !wizardStepContract || !wizardStepCombat) return;
+
+  const status = getSelectedServiceStatus();
+  const target = placesContractStartOnCombatStep(status)
+    ? wizardStepCombat
+    : wizardStepContract;
+
+  if (contractStartField.parentElement !== target) {
+    target.appendChild(contractStartField);
+  }
 }
 
 function getSelectedContractTermChoice() {
@@ -578,6 +624,7 @@ function syncStatusFields() {
 
   syncContractTermLabels();
   syncContractTermField();
+  syncContractStartFieldPlacement();
 }
 
 function syncContractTermField() {
@@ -600,8 +647,15 @@ function syncCombatFields() {
   }
   clearCombatUnitSelection();
 
+  const status = getSelectedServiceStatus();
+  const showDays = showsCombatDays(status);
+
   if (combatDaysField) {
-    combatDaysField.hidden = false;
+    combatDaysField.hidden = !showDays;
+  }
+
+  if (!showDays) {
+    resetCombatDaysInput();
   }
 }
 
@@ -704,6 +758,9 @@ function isStepFilled(stepId) {
       }
       return true;
     case "combat": {
+      if (!showsCombatDays(status)) {
+        return true;
+      }
       if (showsCombatUnitChoice() && !combatUnitType) {
         return false;
       }
@@ -720,7 +777,7 @@ function isStepFilled(stepId) {
 }
 
 function validateCurrentStep(stepId) {
-  if (stepId === "combat") {
+  if (stepId === "combat" && showsCombatDays(getSelectedServiceStatus())) {
     const combatDays = parseIntegerInput("combat-days-input");
     if (Number.isInteger(combatDays) && combatDays > MAX_COMBAT_DAYS) {
       return [COMBAT_DAYS_MAX_ERROR];
@@ -738,14 +795,7 @@ function validateCurrentStep(stepId) {
     }
   }
 
-  if (stepId === "contract") {
-    const dateOrderError = collectDateOrderError();
-    if (dateOrderError.length) {
-      return [dateOrderError[0].label];
-    }
-  }
-
-  if (stepId === "combat") {
+  if (stepId === "contract" || stepId === "combat") {
     const dateOrderError = collectDateOrderError();
     if (dateOrderError.length) {
       return [dateOrderError[0].label];
@@ -790,18 +840,23 @@ function renderWizardStep() {
   }
 
   if (wizardQuestion) {
-    wizardQuestion.textContent =
+    const meta =
       stepId === "combat"
-        ? getCombatStepMeta().title
-        : STEP_META[stepId].title;
+        ? getCombatStepMeta()
+        : stepId === "contract"
+          ? getContractStepMeta()
+          : STEP_META[stepId];
+    wizardQuestion.textContent = meta.title;
   }
 
   if (wizardHelp) {
-    const helpText =
+    const meta =
       stepId === "combat"
-        ? getCombatStepMeta().help
-        : STEP_META[stepId].help;
-    setTextWithResolutionLink(wizardHelp, helpText);
+        ? getCombatStepMeta()
+        : stepId === "contract"
+          ? getContractStepMeta()
+          : STEP_META[stepId];
+    setTextWithResolutionLink(wizardHelp, meta.help);
   }
 
   if (wizardBack) {
@@ -846,7 +901,7 @@ function onWizardInputChange() {
   syncCombatFields();
   clearStepInvalid();
 
-  if (getCurrentStepId() === "combat") {
+  if (getCurrentStepId() === "combat" && showsCombatDays(getSelectedServiceStatus())) {
     const combatDays = parseIntegerInput("combat-days-input");
     if (Number.isInteger(combatDays) && combatDays > MAX_COMBAT_DAYS) {
       showWizardError(COMBAT_DAYS_MAX_ERROR);
@@ -913,9 +968,10 @@ function collectMissing() {
 
   const combatDays = parseIntegerInput("combat-days-input");
   if (
-    !Number.isInteger(combatDays) ||
-    combatDays < 0 ||
-    combatDays > MAX_COMBAT_DAYS
+    showsCombatDays(serviceStatus) &&
+    (!Number.isInteger(combatDays) ||
+      combatDays < 0 ||
+      combatDays > MAX_COMBAT_DAYS)
   ) {
     missing.push({
       id: "field-combat-days",
@@ -1527,7 +1583,9 @@ function buildInput() {
   const input = {
     serviceStatus,
     contractType,
-    combatDays: parseIntegerInput("combat-days-input"),
+    combatDays: showsCombatDays(serviceStatus)
+      ? parseIntegerInput("combat-days-input")
+      : 0,
   };
 
   if (contractStartDate) {
