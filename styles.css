@@ -1056,6 +1056,14 @@ body.mod-nav-open {
   border-radius: var(--radius-card);
 }
 
+.field__error {
+  margin: 8px 0 0;
+  max-width: var(--radio-card-width);
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--error);
+}
+
 .btn-next {
   display: inline-flex;
   align-items: center;

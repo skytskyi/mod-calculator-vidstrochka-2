@@ -1043,10 +1043,80 @@ function showWizardError(message) {
   wizardError.hidden = false;
 }
 
+function clearFieldErrors() {
+  section.querySelectorAll(".field__error").forEach(function (el) {
+    el.remove();
+  });
+}
+
+function clearStepInvalid() {
+  clearFieldErrors();
+  section.querySelectorAll(".is-step-invalid").forEach(function (el) {
+    el.classList.remove("is-step-invalid");
+  });
+}
+
+function highlightInvalidFocusTarget(focusSelector) {
+  if (!focusSelector) return null;
+  const target = document.querySelector(focusSelector);
+  if (!target) return null;
+  const field = target.closest(".field") || target;
+  field.classList.add("is-step-invalid");
+  return field;
+}
+
+/**
+ * @param {string} focusSelector
+ * @param {string} message
+ */
+function showFieldError(focusSelector, message) {
+  const field = highlightInvalidFocusTarget(focusSelector);
+  if (!field || !message) return;
+
+  let errorEl = field.querySelector(".field__error");
+  if (!errorEl) {
+    errorEl = document.createElement("p");
+    errorEl.className = "field__error";
+    field.appendChild(errorEl);
+  }
+  errorEl.textContent = message;
+}
+
+/**
+ * Показує помилку порядку дат служби на кроці 1 під відповідним полем.
+ * @returns {boolean} true, якщо є помилка
+ */
+function syncStatusPeriodValidation() {
+  clearStepInvalid();
+
+  if (getCurrentStepId() !== "status") {
+    return false;
+  }
+
+  const periodError = collectServicePeriodOrderError();
+  if (!periodError) {
+    return false;
+  }
+
+  showFieldError(periodError.focusSelector, periodError.label);
+  return true;
+}
+
 function updateContinueButton() {
   if (!wizardContinue) return;
   const stepId = getCurrentStepId();
-  wizardContinue.disabled = !isStepFilled(stepId);
+  let canContinue = isStepFilled(stepId);
+  if (canContinue && stepId === "status" && collectServicePeriodOrderError()) {
+    canContinue = false;
+  }
+  if (
+    canContinue &&
+    (stepId === "contract" || stepId === "combat") &&
+    collectDateOrderError().length
+  ) {
+    canContinue = false;
+  }
+  wizardContinue.disabled = !canContinue;
   wizardContinue.textContent =
     currentStepIndex === WIZARD_STEP_COUNT - 1 ? "Розрахувати" : "Продовжити";
 }
@@ -1100,11 +1170,30 @@ function goToNextStep() {
   const errors = validateCurrentStep(stepId);
 
   if (errors.length) {
+    if (stepId === "status" && syncStatusPeriodValidation()) {
+      clearWizardError();
+      updateContinueButton();
+      return;
+    }
+
     showWizardError(errors[0]);
+    if (stepId === "contract" || stepId === "combat") {
+      clearStepInvalid();
+      const dateOrderError = collectDateOrderError();
+      if (dateOrderError.length) {
+        applyStepInvalid(dateOrderError);
+        const focus = dateOrderError[0].focusSelector;
+        if (focus) {
+          showFieldError(focus, dateOrderError[0].label);
+          clearWizardError();
+        }
+      }
+    }
     return;
   }
 
   clearWizardError();
+  clearStepInvalid();
 
   if (currentStepIndex < WIZARD_STEP_COUNT - 1) {
     currentStepIndex += 1;
@@ -1127,7 +1216,14 @@ function onWizardInputChange() {
   syncCombatFields();
   clearStepInvalid();
 
-  if (getCurrentStepId() === "combat" && showsCombatDays(getSelectedServiceStatus())) {
+  if (getCurrentStepId() === "status") {
+    if (!syncStatusPeriodValidation()) {
+      clearWizardError();
+    }
+  } else if (
+    getCurrentStepId() === "combat" &&
+    showsCombatDays(getSelectedServiceStatus())
+  ) {
     const combatDays = parseIntegerInput("combat-days-input");
     if (Number.isInteger(combatDays) && combatDays > MAX_COMBAT_DAYS) {
       showWizardError(COMBAT_DAYS_MAX_ERROR);
@@ -1355,12 +1451,6 @@ function mountSummaryBeforeFirst(missing) {
   if (wizardNav && wizardNav.parentNode) {
     wizardNav.parentNode.insertBefore(summary, wizardNav);
   }
-}
-
-function clearStepInvalid() {
-  section.querySelectorAll(".is-step-invalid").forEach(function (el) {
-    el.classList.remove("is-step-invalid");
-  });
 }
 
 function applyStepInvalid(items) {
