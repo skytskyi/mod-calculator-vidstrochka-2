@@ -1344,7 +1344,11 @@ function collectInputSummaryRows(result) {
     });
   }
 
-  if (Number.isInteger(combatDays) && combatDays >= 0) {
+  if (
+    showsCombatDays(status) &&
+    Number.isInteger(combatDays) &&
+    combatDays >= 0
+  ) {
     rows.push({
       label: "Дні участі в бойових діях",
       value: String(combatDays),
