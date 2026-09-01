@@ -394,6 +394,38 @@ describe("split before/after service periods", () => {
       })
     ).toThrow("до 24.02.2022");
   });
+
+  it("rejects before period that starts on/after 24.02.2022", () => {
+    expect(() =>
+      calculate({
+        serviceStatus: ServiceStatus.ACTIVE,
+        contractType: ContractType.ASSAULT,
+        servicePeriodBefore2022: {
+          startDate: new Date(2022, 2, 1),
+          endDate: new Date(2022, 1, 23),
+        },
+        servicePeriodAfter2022: {
+          startDate: new Date(2023, 0, 1),
+        },
+        contractStartDate: new Date(2026, 8, 1),
+        combatDays: 0,
+      })
+    ).toThrow("перед 24.02.2022");
+  });
+
+  it("rejects after period that starts before 24.02.2022", () => {
+    expect(() =>
+      calculate({
+        serviceStatus: ServiceStatus.ACTIVE,
+        contractType: ContractType.ASSAULT,
+        servicePeriodAfter2022: {
+          startDate: new Date(2022, 1, 1),
+        },
+        contractStartDate: new Date(2026, 8, 1),
+        combatDays: 0,
+      })
+    ).toThrow("з 24.02.2022");
+  });
 });
 
 describe("TO-BE explanation format", () => {

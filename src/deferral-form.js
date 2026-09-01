@@ -121,6 +121,15 @@ const PERIOD_END_BEFORE_START_ERROR =
 const PERIOD_END_AFTER_CONTRACT_ERROR =
   "Дата закінчення періоду служби має бути ранішою за планову або фактичну дату підписання нового контракту";
 
+const BEFORE_START_AFTER_WAR_ERROR =
+  "Дата початку військової служби (перед 24.02.2022) має бути раніше 24.02.2022";
+
+const AFTER_START_BEFORE_WAR_ERROR =
+  "Дата початку військової служби (з 24.02.2022) не може бути раніше 24.02.2022";
+
+const BEFORE_END_AFTER_WAR_ERROR =
+  "Дата звільнення з військової служби (перед 24.02.2022) має бути раніше 24.02.2022";
+
 const PERIODS_OVERLAP_ERROR = "Періоди служби не повинні перетинатися";
 
 const MAX_COMBAT_DAYS = 480;
@@ -890,6 +899,43 @@ function collectServicePeriodOrderError() {
     const endInput = row.querySelector('[data-period-field="end"]');
     const startDate = parseDateValue(startInput && startInput.value);
     const endDate = parseDateValue(endInput && endInput.value);
+
+    if (kind === PERIOD_KIND_BEFORE && startDate) {
+      if (startDate.getTime() >= WAR_START_DATE.getTime()) {
+        return {
+          id: row.id || "field-service-periods",
+          label: BEFORE_START_AFTER_WAR_ERROR,
+          focusSelector: "#" + (startInput && startInput.id),
+          kind: "date-order",
+        };
+      }
+    }
+
+    if (kind === PERIOD_KIND_AFTER && startDate) {
+      if (startDate.getTime() < WAR_START_DATE.getTime()) {
+        return {
+          id: row.id || "field-service-periods",
+          label: AFTER_START_BEFORE_WAR_ERROR,
+          focusSelector: "#" + (startInput && startInput.id),
+          kind: "date-order",
+        };
+      }
+    }
+
+    if (kind === PERIOD_KIND_BEFORE && endDate) {
+      if (endDate.getTime() >= WAR_START_DATE.getTime()) {
+        return {
+          id: row.id || "field-service-periods",
+          label:
+            status === ServiceStatus.ACTIVE
+              ? BEFORE_END_AFTER_WAR_ERROR
+              : "Період служби до 24.02.2022 має завершитися до 24.02.2022",
+          focusSelector: "#" + (endInput && endInput.id),
+          kind: "date-order",
+        };
+      }
+    }
+
     if (!startDate) continue;
 
     if (endDate && endDate.getTime() <= startDate.getTime()) {
@@ -900,29 +946,26 @@ function collectServicePeriodOrderError() {
         kind: "date-order",
       };
     }
+  }
 
-    if (kind === PERIOD_KIND_BEFORE && endDate) {
-      if (endDate.getTime() >= WAR_START_DATE.getTime()) {
-        return {
-          id: row.id || "field-service-periods",
-          label:
-            "Період служби до 24.02.2022 має завершитися до 24.02.2022",
-          focusSelector: "#" + (endInput && endInput.id),
-          kind: "date-order",
-        };
-      }
-    }
-
-    if (kind === PERIOD_KIND_AFTER) {
-      if (startDate.getTime() < WAR_START_DATE.getTime()) {
-        return {
-          id: row.id || "field-service-periods",
-          label:
-            "Дата початку служби після 24.02.2022 не може бути раніше 24.02.2022",
-          focusSelector: "#" + (startInput && startInput.id),
-          kind: "date-order",
-        };
-      }
+  // ACTIVE break: start and end are on different rows — compare across lists.
+  if (status === ServiceStatus.ACTIVE && isStartedBeforeEnabled() && isBreakEnabled()) {
+    const before = readActiveBeforePeriod();
+    if (
+      before &&
+      before.startDate &&
+      before.endDate &&
+      before.endDate.getTime() <= before.startDate.getTime()
+    ) {
+      const endInput =
+        servicePeriodsExtraList &&
+        servicePeriodsExtraList.querySelector('[data-period-field="end"]');
+      return {
+        id: "field-service-periods",
+        label: PERIOD_END_BEFORE_START_ERROR,
+        focusSelector: endInput ? "#" + endInput.id : "#field-service-periods",
+        kind: "date-order",
+      };
     }
   }
 
