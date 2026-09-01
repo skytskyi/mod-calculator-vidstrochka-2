@@ -1576,6 +1576,11 @@ body.mod-nav-open {
   border-top: 1px dotted rgb(107 107 107);
 }
 
+#service-periods-extra-list .service-period + .service-period {
+  padding-top: 0;
+  border-top: 0;
+}
+
 .service-period__head {
   display: flex;
   align-items: center;
