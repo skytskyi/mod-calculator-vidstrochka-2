@@ -669,9 +669,7 @@ function validateBefore2022Period(period, options) {
   }
 
   if (!isBefore(period.startDate, WAR_START_DATE)) {
-    throw new Error(
-      "Дата початку військової служби (перед 24.02.2022) має бути раніше 24.02.2022"
-    );
+    throw new Error("Дата має бути раніше 24.02.2022");
   }
 
   if (!(period.endDate instanceof Date)) {

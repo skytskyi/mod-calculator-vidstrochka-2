@@ -410,7 +410,7 @@ describe("split before/after service periods", () => {
         contractStartDate: new Date(2026, 8, 1),
         combatDays: 0,
       })
-    ).toThrow("перед 24.02.2022");
+    ).toThrow("Дата має бути раніше 24.02.2022");
   });
 
   it("rejects after period that starts before 24.02.2022", () => {
