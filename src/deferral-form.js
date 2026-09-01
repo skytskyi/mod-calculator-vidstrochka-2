@@ -165,14 +165,14 @@ const PERIOD_KIND_BEFORE = "before";
 const PERIOD_KIND_AFTER = "after";
 const TITLE_BEFORE =
   "Останній безперервний період служби до 24.02.2022";
+const TITLE_BEFORE_ACTIVE =
+  "Безперервний період служби до 24.02.2022";
 const LABEL_AFTER_START =
   "Дата початку військової служби (з 24.02.2022)";
 const LABEL_BEFORE_START = "Дата початку військової служби";
 const LABEL_BEFORE_START_ACTIVE =
   "Дата початку військової служби (перед 24.02.2022)";
 const LABEL_BEFORE_END = "Дата звільнення з військової служби";
-const LABEL_BEFORE_END_ACTIVE =
-  "Дата звільнення з військової служби (перед 24.02.2022)";
 const WAR_START_ISO = "2022-02-24";
 const DAY_BEFORE_WAR_ISO = "2022-02-23";
 
@@ -228,9 +228,14 @@ function readActiveBeforePeriod() {
     servicePeriodsPrimaryList.querySelector(
       '.service-period[data-period-kind="before"] [data-period-field="start"]'
     );
-  const endInput =
-    servicePeriodsExtraList &&
-    servicePeriodsExtraList.querySelector('[data-period-field="end"]');
+  const beforeRow = startInput && startInput.closest(".service-period");
+  let endInput =
+    beforeRow && beforeRow.querySelector('[data-period-field="end"]');
+  if (!endInput && servicePeriodsExtraList) {
+    endInput = servicePeriodsExtraList.querySelector(
+      '[data-period-field="end"]'
+    );
+  }
 
   const startDate = parseDateValue(startInput && startInput.value);
   if (!startDate) return null;
@@ -280,6 +285,8 @@ function createDateField(inputId, fieldName, options) {
  * @param {{
  *   showTitle?: boolean,
  *   showEnd?: boolean,
+ *   showStart?: boolean,
+ *   title?: string,
  *   startLabel?: string,
  *   endLabel?: string,
  *   idSuffix?: string,
@@ -305,7 +312,7 @@ function createServicePeriodRow(kind, options) {
     head.className = "service-period__head";
     const title = document.createElement("p");
     title.className = "service-period__title";
-    title.textContent = TITLE_BEFORE;
+    title.textContent = opts.title || TITLE_BEFORE;
     head.appendChild(title);
     row.appendChild(head);
   }
@@ -561,35 +568,35 @@ function ensureActiveServicePeriods() {
     return;
   }
 
-  const beforeStartRow = createServicePeriodRow(PERIOD_KIND_BEFORE, {
-    showTitle: false,
-    showEnd: false,
-    startLabel: LABEL_BEFORE_START_ACTIVE,
-    idSuffix: "before-start",
-  });
-  servicePeriodsPrimaryList.appendChild(beforeStartRow);
-  fillPeriodInputs(beforeStartRow, preservedBeforePeriodValues);
-
   if (mode === "before-continuous") {
+    const beforeStartRow = createServicePeriodRow(PERIOD_KIND_BEFORE, {
+      showTitle: false,
+      showEnd: false,
+      startLabel: LABEL_BEFORE_START_ACTIVE,
+      idSuffix: "before-start",
+    });
+    servicePeriodsPrimaryList.appendChild(beforeStartRow);
+    fillPeriodInputs(beforeStartRow, preservedBeforePeriodValues);
     return;
   }
 
-  const beforeEndRow = createServicePeriodRow(PERIOD_KIND_BEFORE, {
-    showTitle: false,
+  // BREAK: before start + end side by side under a shared heading, then after start.
+  const beforeRow = createServicePeriodRow(PERIOD_KIND_BEFORE, {
+    showTitle: true,
     showEnd: true,
-    showStart: false,
-    endLabel: LABEL_BEFORE_END_ACTIVE,
-    idSuffix: "before-end",
+    title: TITLE_BEFORE_ACTIVE,
+    startLabel: LABEL_BEFORE_START,
+    endLabel: LABEL_BEFORE_END,
   });
-  servicePeriodsExtraList.appendChild(beforeEndRow);
-  fillPeriodInputs(beforeEndRow, preservedBeforePeriodValues);
+  servicePeriodsPrimaryList.appendChild(beforeRow);
+  fillPeriodInputs(beforeRow, preservedBeforePeriodValues);
 
   const afterRow = createServicePeriodRow(PERIOD_KIND_AFTER, {
     showTitle: false,
     showEnd: false,
     startLabel: LABEL_AFTER_START,
   });
-  servicePeriodsExtraList.appendChild(afterRow);
+  servicePeriodsPrimaryList.appendChild(afterRow);
   fillPeriodInputs(afterRow, preservedAfterPeriodValues);
 }
 
@@ -947,27 +954,6 @@ function collectServicePeriodOrderError() {
         id: row.id || "field-service-periods",
         label: PERIOD_END_BEFORE_START_ERROR,
         focusSelector: "#" + (endInput && endInput.id),
-        kind: "date-order",
-      };
-    }
-  }
-
-  // ACTIVE break: start and end are on different rows — compare across lists.
-  if (status === ServiceStatus.ACTIVE && isStartedBeforeEnabled() && isBreakEnabled()) {
-    const before = readActiveBeforePeriod();
-    if (
-      before &&
-      before.startDate &&
-      before.endDate &&
-      before.endDate.getTime() <= before.startDate.getTime()
-    ) {
-      const endInput =
-        servicePeriodsExtraList &&
-        servicePeriodsExtraList.querySelector('[data-period-field="end"]');
-      return {
-        id: "field-service-periods",
-        label: PERIOD_END_BEFORE_START_ERROR,
-        focusSelector: endInput ? "#" + endInput.id : "#field-service-periods",
         kind: "date-order",
       };
     }
@@ -1645,7 +1631,7 @@ function collectInputSummaryRows(result) {
     rows.push({
       label:
         status === ServiceStatus.ACTIVE
-          ? LABEL_BEFORE_START_ACTIVE
+          ? TITLE_BEFORE_ACTIVE
           : TITLE_BEFORE,
       value:
         formatDisplayDate(beforePeriod.startDate) +
