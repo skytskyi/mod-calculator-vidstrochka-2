@@ -1050,18 +1050,24 @@ body.mod-nav-open {
   text-decoration-thickness: 2px;
 }
 
-.field.is-step-invalid {
+.field.is-step-invalid .date-input {
+  border-color: var(--error);
   outline: 2px solid var(--error);
-  outline-offset: 3px;
-  border-radius: var(--radius-card);
+  outline-offset: 0;
+}
+
+.field.is-step-invalid .date-input:focus {
+  outline: 2px solid var(--error);
+  outline-offset: 0;
 }
 
 .field__error {
   margin: 8px 0 0;
-  max-width: var(--radio-card-width);
+  max-width: 36em;
   font-size: 14px;
-  line-height: 1.4;
+  line-height: 1.45;
   color: var(--error);
+  text-wrap: pretty;
 }
 
 .btn-next {
