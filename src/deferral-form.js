@@ -29,14 +29,9 @@ const servicePeriodsExtraList = document.getElementById(
 const servicePeriodsBeforeList = document.getElementById(
   "service-periods-before-list"
 );
-const serviceStartedBeforeWrap = document.getElementById(
-  "service-started-before-wrap"
+const activeServicePathField = document.getElementById(
+  "field-active-service-path"
 );
-const serviceStartedBeforeToggle = document.getElementById(
-  "service-started-before-toggle"
-);
-const serviceBreakWrap = document.getElementById("service-break-wrap");
-const serviceBreakToggle = document.getElementById("service-break-toggle");
 const serviceBeforeToggleWrap = document.getElementById(
   "service-before-toggle-wrap"
 );
@@ -357,22 +352,34 @@ function createServicePeriodRow(kind, options) {
   return row;
 }
 
-function isStartedBeforeEnabled() {
-  return !!(serviceStartedBeforeToggle && serviceStartedBeforeToggle.checked);
+const ActiveServicePath = {
+  AFTER_ONLY: "AFTER_ONLY",
+  CONTINUOUS: "CONTINUOUS",
+  BREAK: "BREAK",
+};
+
+function getActiveServicePath() {
+  const selected = document.querySelector(
+    'input[name="activeServicePath"]:checked'
+  );
+  return selected ? selected.value : null;
 }
 
-function setStartedBeforeEnabled(enabled) {
-  if (!serviceStartedBeforeToggle) return;
-  serviceStartedBeforeToggle.checked = !!enabled;
+function clearActiveServicePath() {
+  document.querySelectorAll('input[name="activeServicePath"]').forEach(function (input) {
+    input.checked = false;
+  });
+}
+
+function isStartedBeforeEnabled() {
+  const path = getActiveServicePath();
+  return (
+    path === ActiveServicePath.CONTINUOUS || path === ActiveServicePath.BREAK
+  );
 }
 
 function isBreakEnabled() {
-  return !!(serviceBreakToggle && serviceBreakToggle.checked);
-}
-
-function setBreakEnabled(enabled) {
-  if (!serviceBreakToggle) return;
-  serviceBreakToggle.checked = !!enabled;
+  return getActiveServicePath() === ActiveServicePath.BREAK;
 }
 
 function isBeforePeriodEnabled() {
@@ -475,8 +482,11 @@ function getServicePeriodsMode(status) {
     return isBeforePeriodEnabled() ? "discharged-on" : "discharged-off";
   }
   if (status === ServiceStatus.ACTIVE) {
-    if (!isStartedBeforeEnabled()) return "after-only";
-    return isBreakEnabled() ? "before-break" : "before-continuous";
+    const path = getActiveServicePath();
+    if (path === ActiveServicePath.AFTER_ONLY) return "after-only";
+    if (path === ActiveServicePath.CONTINUOUS) return "before-continuous";
+    if (path === ActiveServicePath.BREAK) return "before-break";
+    return "active-none";
   }
   return "none";
 }
@@ -485,15 +495,11 @@ function syncServicePeriodToggleVisibility(status) {
   const isActive = status === ServiceStatus.ACTIVE;
   const isDischarged = status === ServiceStatus.DISCHARGED;
 
-  if (serviceStartedBeforeWrap) serviceStartedBeforeWrap.hidden = !isActive;
-  if (serviceBreakWrap) {
-    serviceBreakWrap.hidden = !(isActive && isStartedBeforeEnabled());
-  }
+  if (activeServicePathField) activeServicePathField.hidden = !isActive;
   if (serviceBeforeToggleWrap) serviceBeforeToggleWrap.hidden = !isDischarged;
 
   if (!isActive) {
-    setStartedBeforeEnabled(false);
-    setBreakEnabled(false);
+    clearActiveServicePath();
   }
   if (!isDischarged) {
     setBeforePeriodEnabled(false);
@@ -530,14 +536,6 @@ function ensureActiveServicePeriods() {
   if (!servicePeriodsPrimaryList || !servicePeriodsExtraList) return;
   if (servicePeriodsBeforeList) servicePeriodsBeforeList.replaceChildren();
 
-  const startedBefore = isStartedBeforeEnabled();
-  if (serviceBreakWrap) {
-    serviceBreakWrap.hidden = !startedBefore;
-  }
-  if (!startedBefore) {
-    setBreakEnabled(false);
-  }
-
   const mode = getServicePeriodsMode(ServiceStatus.ACTIVE);
   if (mode === lastServicePeriodsMode) {
     return;
@@ -548,7 +546,11 @@ function ensureActiveServicePeriods() {
   servicePeriodsExtraList.replaceChildren();
   lastServicePeriodsMode = mode;
 
-  if (!startedBefore) {
+  if (mode === "active-none") {
+    return;
+  }
+
+  if (mode === "after-only") {
     const afterRow = createServicePeriodRow(PERIOD_KIND_AFTER, {
       showTitle: false,
       showEnd: false,
@@ -568,7 +570,7 @@ function ensureActiveServicePeriods() {
   servicePeriodsPrimaryList.appendChild(beforeStartRow);
   fillPeriodInputs(beforeStartRow, preservedBeforePeriodValues);
 
-  if (!isBreakEnabled()) {
+  if (mode === "before-continuous") {
     return;
   }
 
@@ -595,8 +597,7 @@ function ensureServicePeriods() {
   const status = getSelectedServiceStatus();
 
   if (status !== ServiceStatus.ACTIVE && status !== ServiceStatus.DISCHARGED) {
-    setStartedBeforeEnabled(false);
-    setBreakEnabled(false);
+    clearActiveServicePath();
     setBeforePeriodEnabled(false);
     clearServicePeriods();
     syncServicePeriodToggleVisibility(status);
@@ -862,7 +863,10 @@ function getCurrentStepId() {
 
 function areServicePeriodsFilled(status) {
   if (status === ServiceStatus.ACTIVE) {
-    if (!isStartedBeforeEnabled()) {
+    const path = getActiveServicePath();
+    if (!path) return false;
+
+    if (path === ActiveServicePath.AFTER_ONLY) {
       const after = readPeriodByKind(PERIOD_KIND_AFTER);
       return !!(after && after.startDate);
     }
@@ -870,7 +874,7 @@ function areServicePeriodsFilled(status) {
     const before = readActiveBeforePeriod();
     if (!before || !before.startDate) return false;
 
-    if (!isBreakEnabled()) {
+    if (path === ActiveServicePath.CONTINUOUS) {
       return true;
     }
 
@@ -1520,8 +1524,7 @@ function clearWizardForm() {
     combatDaysInput.value = "0";
   }
 
-  setStartedBeforeEnabled(false);
-  setBreakEnabled(false);
+  clearActiveServicePath();
   setBeforePeriodEnabled(false);
   if (servicePeriodsPrimaryList) servicePeriodsPrimaryList.replaceChildren();
   if (servicePeriodsExtraList) servicePeriodsExtraList.replaceChildren();
@@ -2060,19 +2063,12 @@ if (wizardEdit) {
   wizardEdit.addEventListener("click", returnToWizard);
 }
 
-if (serviceStartedBeforeToggle) {
-  serviceStartedBeforeToggle.addEventListener("change", function () {
+document.querySelectorAll('input[name="activeServicePath"]').forEach(function (input) {
+  input.addEventListener("change", function () {
     ensureServicePeriods();
     onWizardInputChange();
   });
-}
-
-if (serviceBreakToggle) {
-  serviceBreakToggle.addEventListener("change", function () {
-    ensureServicePeriods();
-    onWizardInputChange();
-  });
-}
+});
 
 if (serviceBeforeToggle) {
   serviceBeforeToggle.addEventListener("change", function () {

@@ -88,40 +88,76 @@
                         id="field-service-periods"
                         hidden
                       >
-                        <label
-                          class="switch-field"
-                          id="service-started-before-wrap"
+                        <fieldset
+                          class="field"
+                          id="field-active-service-path"
                           hidden
                         >
-                          <span class="switch-field__text"
-                            >Почав служити до 24.02.2022</span
+                          <legend class="field__legend">Період вашої служби</legend>
+                          <div
+                            class="radio-row radio-row--wizard radio-row--service-path"
                           >
-                          <input
-                            type="checkbox"
-                            class="switch-field__input"
-                            id="service-started-before-toggle"
-                            name="startedServiceBefore2022"
-                          />
-                          <span class="switch-field__ui" aria-hidden="true"></span>
-                        </label>
+                            <label class="radio-card radio-card--compact">
+                              <input
+                                type="radio"
+                                name="activeServicePath"
+                                value="AFTER_ONLY"
+                              />
+                              <span class="radio-card__ui"></span>
+                              <span class="radio-card__content">
+                                <span class="radio-card__text"
+                                  >Служба вперше розпочалася 24.02.2022 або
+                                  пізніше</span
+                                >
+                                <span class="radio-card__term"
+                                  >Попередніх періодів служби не було.</span
+                                >
+                              </span>
+                            </label>
+                            <label class="radio-card radio-card--compact">
+                              <input
+                                type="radio"
+                                name="activeServicePath"
+                                value="CONTINUOUS"
+                              />
+                              <span class="radio-card__ui"></span>
+                              <span class="radio-card__content">
+                                <span class="radio-card__text"
+                                  >Безперервна служба триває ще з періоду до
+                                  24.02.2022</span
+                                >
+                                <span class="radio-card__term"
+                                  >Звільнення після початку поточного періоду не
+                                  було.</span
+                                >
+                              </span>
+                            </label>
+                            <label class="radio-card radio-card--compact">
+                              <input
+                                type="radio"
+                                name="activeServicePath"
+                                value="BREAK"
+                              />
+                              <span class="radio-card__ui"></span>
+                              <span class="radio-card__content">
+                                <span class="radio-card__text"
+                                  >Поточна служба розпочалася після попереднього
+                                  звільнення</span
+                                >
+                                <span class="radio-card__term"
+                                  >Попередній період завершився до 24.02.2022, а
+                                  поточний розпочався 24.02.2022 або
+                                  пізніше.</span
+                                >
+                              </span>
+                            </label>
+                          </div>
+                        </fieldset>
 
                         <div
                           class="service-periods__list"
                           id="service-periods-primary-list"
                         ></div>
-
-                        <label class="switch-field" id="service-break-wrap" hidden>
-                          <span class="switch-field__text"
-                            >Була перерва / звільнення до 24.02.2022</span
-                          >
-                          <input
-                            type="checkbox"
-                            class="switch-field__input"
-                            id="service-break-toggle"
-                            name="hadServiceBreakBefore2022"
-                          />
-                          <span class="switch-field__ui" aria-hidden="true"></span>
-                        </label>
 
                         <div
                           class="service-periods__list"
