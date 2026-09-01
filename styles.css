@@ -1626,12 +1626,21 @@ body.mod-nav-open {
   user-select: none;
 }
 
-.service-periods__after:not(:empty) + .switch-field {
+.switch-field[hidden] {
+  display: none !important;
+}
+
+.service-periods__list:not(:empty) {
   margin-top: 24px;
 }
 
-.switch-field + .service-periods__before:not(:empty) {
+.switch-field + .service-periods__list:not(:empty),
+.service-periods__list:not(:empty) + .switch-field {
   margin-top: 24px;
+}
+
+.service-periods > .switch-field:first-child {
+  margin-top: 0;
 }
 
 .switch-field__text {

@@ -12,11 +12,25 @@ const combatDaysField = document.getElementById("field-combat-days");
 const combatAssignmentField = document.getElementById("field-combat-assignment");
 const combatDaysInput = document.getElementById("combat-days-input");
 const servicePeriodsField = document.getElementById("field-service-periods");
-const servicePeriodsAfterList = document.getElementById(
-  "service-periods-after-list"
+const servicePeriodsPrimaryList = document.getElementById(
+  "service-periods-primary-list"
+);
+const servicePeriodsExtraList = document.getElementById(
+  "service-periods-extra-list"
 );
 const servicePeriodsBeforeList = document.getElementById(
   "service-periods-before-list"
+);
+const serviceStartedBeforeWrap = document.getElementById(
+  "service-started-before-wrap"
+);
+const serviceStartedBeforeToggle = document.getElementById(
+  "service-started-before-toggle"
+);
+const serviceBreakWrap = document.getElementById("service-break-wrap");
+const serviceBreakToggle = document.getElementById("service-break-toggle");
+const serviceBeforeToggleWrap = document.getElementById(
+  "service-before-toggle-wrap"
 );
 const serviceBeforeToggle = document.getElementById("service-before-toggle");
 const contractStartField = document.getElementById("field-contract-start");
@@ -142,36 +156,34 @@ const TITLE_BEFORE =
 const LABEL_AFTER_START =
   "Дата початку військової служби (з 24.02.2022)";
 const LABEL_BEFORE_START = "Дата початку військової служби";
+const LABEL_BEFORE_START_ACTIVE =
+  "Дата початку військової служби (перед 24.02.2022)";
+const LABEL_BEFORE_END = "Дата звільнення з військової служби";
+const LABEL_BEFORE_END_ACTIVE =
+  "Дата звільнення з військової служби (перед 24.02.2022)";
 const WAR_START_ISO = "2022-02-24";
 const DAY_BEFORE_WAR_ISO = "2022-02-23";
 
-function getPeriodListForKind(kind) {
-  return kind === PERIOD_KIND_BEFORE
-    ? servicePeriodsBeforeList
-    : servicePeriodsAfterList;
-}
-
 function getServicePeriodRows() {
+  const lists = [
+    servicePeriodsPrimaryList,
+    servicePeriodsExtraList,
+    servicePeriodsBeforeList,
+  ];
   const rows = [];
-  if (servicePeriodsAfterList) {
-    rows.push.apply(
-      rows,
-      servicePeriodsAfterList.querySelectorAll(".service-period")
-    );
-  }
-  if (servicePeriodsBeforeList) {
-    rows.push.apply(
-      rows,
-      servicePeriodsBeforeList.querySelectorAll(".service-period")
-    );
-  }
+  lists.forEach(function (list) {
+    if (!list) return;
+    rows.push.apply(rows, list.querySelectorAll(".service-period"));
+  });
   return rows;
 }
 
 function getServicePeriodRowByKind(kind) {
-  const list = getPeriodListForKind(kind);
-  if (!list) return null;
-  return list.querySelector('.service-period[data-period-kind="' + kind + '"]');
+  const rows = getServicePeriodRows();
+  for (let i = 0; i < rows.length; i += 1) {
+    if (rows[i].dataset.periodKind === kind) return rows[i];
+  }
+  return null;
 }
 
 /**
@@ -179,6 +191,10 @@ function getServicePeriodRowByKind(kind) {
  * @returns {{ startDate: Date, endDate?: Date } | null}
  */
 function readPeriodByKind(kind) {
+  if (kind === PERIOD_KIND_BEFORE && getSelectedServiceStatus() === ServiceStatus.ACTIVE) {
+    return readActiveBeforePeriod();
+  }
+
   const row = getServicePeriodRowByKind(kind);
   if (!row) return null;
   const startInput = row.querySelector('[data-period-field="start"]');
@@ -187,11 +203,29 @@ function readPeriodByKind(kind) {
   if (!startDate) return null;
   /** @type {{ startDate: Date, endDate?: Date }} */
   const period = { startDate };
-  // After-2022 period never has an end date in the UI.
   if (kind === PERIOD_KIND_BEFORE) {
     const endDate = parseDateValue(endInput && endInput.value);
     if (endDate) period.endDate = endDate;
   }
+  return period;
+}
+
+function readActiveBeforePeriod() {
+  const startInput =
+    servicePeriodsPrimaryList &&
+    servicePeriodsPrimaryList.querySelector(
+      '.service-period[data-period-kind="before"] [data-period-field="start"]'
+    );
+  const endInput =
+    servicePeriodsExtraList &&
+    servicePeriodsExtraList.querySelector('[data-period-field="end"]');
+
+  const startDate = parseDateValue(startInput && startInput.value);
+  if (!startDate) return null;
+  /** @type {{ startDate: Date, endDate?: Date }} */
+  const period = { startDate };
+  const endDate = parseDateValue(endInput && endInput.value);
+  if (endDate) period.endDate = endDate;
   return period;
 }
 
@@ -231,17 +265,32 @@ function createDateField(inputId, fieldName, options) {
 
 /**
  * @param {'before' | 'after'} kind
+ * @param {{
+ *   showTitle?: boolean,
+ *   showEnd?: boolean,
+ *   startLabel?: string,
+ *   endLabel?: string,
+ *   idSuffix?: string,
+ * }} [options]
  */
-function createServicePeriodRow(kind) {
+function createServicePeriodRow(kind, options) {
+  const opts = options || {};
+  const showTitle = opts.showTitle !== false && kind === PERIOD_KIND_BEFORE;
+  const showEnd = opts.showEnd !== false && kind === PERIOD_KIND_BEFORE;
+  const startLabelText =
+    opts.startLabel ||
+    (kind === PERIOD_KIND_AFTER ? LABEL_AFTER_START : LABEL_BEFORE_START);
+  const endLabelText = opts.endLabel || LABEL_BEFORE_END;
+  const idSuffix = opts.idSuffix || kind;
+
   const row = document.createElement("div");
   row.className = "service-period";
   row.dataset.periodKind = kind;
-  row.id = "service-period-" + kind;
+  row.id = "service-period-" + idSuffix;
 
-  if (kind === PERIOD_KIND_BEFORE) {
+  if (showTitle) {
     const head = document.createElement("div");
     head.className = "service-period__head";
-
     const title = document.createElement("p");
     title.className = "service-period__title";
     title.textContent = TITLE_BEFORE;
@@ -249,39 +298,39 @@ function createServicePeriodRow(kind) {
     row.appendChild(head);
   }
 
-  const startId = "service-period-" + kind + "-start";
+  const fields = document.createElement("div");
+  const onlyEnd = showEnd && opts.showStart === false;
+  fields.className =
+    kind === PERIOD_KIND_AFTER || !showEnd || onlyEnd
+      ? "service-period__fields service-period__fields--single"
+      : "service-period__fields";
+
   const dateOpts =
     kind === PERIOD_KIND_BEFORE
       ? { min: EARLIEST_SERVICE_DATE_VALUE, max: DAY_BEFORE_WAR_ISO }
       : { min: WAR_START_ISO };
 
-  const startField = document.createElement("div");
-  startField.className = "field field--date";
-  const startLabel = document.createElement("label");
-  startLabel.className = "field__legend";
-  startLabel.htmlFor = startId;
-  startLabel.textContent =
-    kind === PERIOD_KIND_AFTER ? LABEL_AFTER_START : LABEL_BEFORE_START;
-  startField.appendChild(startLabel);
-  startField.appendChild(createDateField(startId, "start", dateOpts));
+  if (opts.showStart !== false) {
+    const startId = "service-period-" + idSuffix + "-start";
+    const startField = document.createElement("div");
+    startField.className = "field field--date";
+    const startLabel = document.createElement("label");
+    startLabel.className = "field__legend";
+    startLabel.htmlFor = startId;
+    startLabel.textContent = startLabelText;
+    startField.appendChild(startLabel);
+    startField.appendChild(createDateField(startId, "start", dateOpts));
+    fields.appendChild(startField);
+  }
 
-  const fields = document.createElement("div");
-  fields.className =
-    kind === PERIOD_KIND_AFTER
-      ? "service-period__fields service-period__fields--single"
-      : "service-period__fields";
-  fields.appendChild(startField);
-
-  // After-2022 period for active service has no discharge date:
-  // end is always the new contract date (or today) in the formula.
-  if (kind === PERIOD_KIND_BEFORE) {
-    const endId = "service-period-" + kind + "-end";
+  if (showEnd) {
+    const endId = "service-period-" + idSuffix + "-end";
     const endField = document.createElement("div");
     endField.className = "field field--date service-period__end";
     const endLabel = document.createElement("label");
     endLabel.className = "field__legend";
     endLabel.htmlFor = endId;
-    endLabel.textContent = "Дата звільнення з військової служби";
+    endLabel.textContent = endLabelText;
     endField.appendChild(endLabel);
     endField.appendChild(createDateField(endId, "end", dateOpts));
     fields.appendChild(endField);
@@ -289,6 +338,24 @@ function createServicePeriodRow(kind) {
 
   row.appendChild(fields);
   return row;
+}
+
+function isStartedBeforeEnabled() {
+  return !!(serviceStartedBeforeToggle && serviceStartedBeforeToggle.checked);
+}
+
+function setStartedBeforeEnabled(enabled) {
+  if (!serviceStartedBeforeToggle) return;
+  serviceStartedBeforeToggle.checked = !!enabled;
+}
+
+function isBreakEnabled() {
+  return !!(serviceBreakToggle && serviceBreakToggle.checked);
+}
+
+function setBreakEnabled(enabled) {
+  if (!serviceBreakToggle) return;
+  serviceBreakToggle.checked = !!enabled;
 }
 
 function isBeforePeriodEnabled() {
@@ -312,46 +379,56 @@ function readPeriodRowValues(row) {
 
 /** @type {{ start: string, end: string } | null} */
 let preservedBeforePeriodValues = null;
+/** @type {{ start: string, end: string } | null} */
+let preservedAfterPeriodValues = null;
+/** @type {string | null} */
+let lastServicePeriodsMode = null;
+
+function captureActivePeriodValues() {
+  const before = readActiveBeforePeriod();
+  if (before) {
+    preservedBeforePeriodValues = {
+      start: formatIsoDate(before.startDate),
+      end: before.endDate ? formatIsoDate(before.endDate) : "",
+    };
+  } else {
+    const startInput =
+      servicePeriodsPrimaryList &&
+      servicePeriodsPrimaryList.querySelector('[data-period-field="start"]');
+    const endInput =
+      servicePeriodsExtraList &&
+      servicePeriodsExtraList.querySelector('[data-period-field="end"]');
+    if ((startInput && startInput.value) || (endInput && endInput.value)) {
+      preservedBeforePeriodValues = {
+        start: (startInput && startInput.value) || "",
+        end: (endInput && endInput.value) || "",
+      };
+    }
+  }
+
+  const afterRow = getServicePeriodRowByKind(PERIOD_KIND_AFTER);
+  const afterValues = readPeriodRowValues(afterRow);
+  if (afterValues && afterValues.start) {
+    preservedAfterPeriodValues = afterValues;
+  }
+}
+
+function formatIsoDate(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return y + "-" + m + "-" + d;
+}
 
 function captureBeforePeriodValues() {
+  if (getSelectedServiceStatus() === ServiceStatus.ACTIVE) {
+    captureActivePeriodValues();
+    return;
+  }
   const values = readPeriodRowValues(getServicePeriodRowByKind(PERIOD_KIND_BEFORE));
   if (values && (values.start || values.end)) {
     preservedBeforePeriodValues = values;
   }
-}
-
-function ensureBeforePeriodRow() {
-  if (!servicePeriodsBeforeList) return;
-  let beforeRow = getServicePeriodRowByKind(PERIOD_KIND_BEFORE);
-  if (!beforeRow) {
-    beforeRow = createServicePeriodRow(PERIOD_KIND_BEFORE);
-    servicePeriodsBeforeList.appendChild(beforeRow);
-    fillPeriodInputs(beforeRow, preservedBeforePeriodValues);
-  }
-}
-
-function removeBeforePeriodRow() {
-  const row = getServicePeriodRowByKind(PERIOD_KIND_BEFORE);
-  if (!row) return;
-  captureBeforePeriodValues();
-  row.remove();
-}
-
-function ensureAfterPeriodRow() {
-  if (!servicePeriodsAfterList) return;
-  if (getServicePeriodRowByKind(PERIOD_KIND_AFTER)) return;
-  servicePeriodsAfterList.appendChild(createServicePeriodRow(PERIOD_KIND_AFTER));
-}
-
-function removeAfterPeriodRow() {
-  const row = getServicePeriodRowByKind(PERIOD_KIND_AFTER);
-  if (row) row.remove();
-}
-
-function clearServicePeriods() {
-  captureBeforePeriodValues();
-  if (servicePeriodsAfterList) servicePeriodsAfterList.replaceChildren();
-  if (servicePeriodsBeforeList) servicePeriodsBeforeList.replaceChildren();
 }
 
 function fillPeriodInputs(row, values) {
@@ -368,33 +445,155 @@ function fillPeriodInputs(row, values) {
   }
 }
 
-function syncBeforePeriodFromToggle() {
-  if (isBeforePeriodEnabled()) {
-    ensureBeforePeriodRow();
-  } else {
-    removeBeforePeriodRow();
+function clearServicePeriods() {
+  captureBeforePeriodValues();
+  if (servicePeriodsPrimaryList) servicePeriodsPrimaryList.replaceChildren();
+  if (servicePeriodsExtraList) servicePeriodsExtraList.replaceChildren();
+  if (servicePeriodsBeforeList) servicePeriodsBeforeList.replaceChildren();
+  lastServicePeriodsMode = null;
+}
+
+function getServicePeriodsMode(status) {
+  if (status === ServiceStatus.DISCHARGED) {
+    return isBeforePeriodEnabled() ? "discharged-on" : "discharged-off";
   }
+  if (status === ServiceStatus.ACTIVE) {
+    if (!isStartedBeforeEnabled()) return "after-only";
+    return isBreakEnabled() ? "before-break" : "before-continuous";
+  }
+  return "none";
+}
+
+function syncServicePeriodToggleVisibility(status) {
+  const isActive = status === ServiceStatus.ACTIVE;
+  const isDischarged = status === ServiceStatus.DISCHARGED;
+
+  if (serviceStartedBeforeWrap) serviceStartedBeforeWrap.hidden = !isActive;
+  if (serviceBreakWrap) {
+    serviceBreakWrap.hidden = !(isActive && isStartedBeforeEnabled());
+  }
+  if (serviceBeforeToggleWrap) serviceBeforeToggleWrap.hidden = !isDischarged;
+
+  if (!isActive) {
+    setStartedBeforeEnabled(false);
+    setBreakEnabled(false);
+  }
+  if (!isDischarged) {
+    setBeforePeriodEnabled(false);
+  }
+}
+
+function ensureDischargedServicePeriods() {
+  if (!servicePeriodsBeforeList) return;
+  if (servicePeriodsPrimaryList) servicePeriodsPrimaryList.replaceChildren();
+  if (servicePeriodsExtraList) servicePeriodsExtraList.replaceChildren();
+
+  const mode = getServicePeriodsMode(ServiceStatus.DISCHARGED);
+  if (mode === lastServicePeriodsMode) {
+    return;
+  }
+
+  captureBeforePeriodValues();
+  servicePeriodsBeforeList.replaceChildren();
+  lastServicePeriodsMode = mode;
+
+  if (!isBeforePeriodEnabled()) return;
+
+  const beforeRow = createServicePeriodRow(PERIOD_KIND_BEFORE, {
+    showTitle: true,
+    showEnd: true,
+    startLabel: LABEL_BEFORE_START,
+    endLabel: LABEL_BEFORE_END,
+  });
+  servicePeriodsBeforeList.appendChild(beforeRow);
+  fillPeriodInputs(beforeRow, preservedBeforePeriodValues);
+}
+
+function ensureActiveServicePeriods() {
+  if (!servicePeriodsPrimaryList || !servicePeriodsExtraList) return;
+  if (servicePeriodsBeforeList) servicePeriodsBeforeList.replaceChildren();
+
+  const startedBefore = isStartedBeforeEnabled();
+  if (serviceBreakWrap) {
+    serviceBreakWrap.hidden = !startedBefore;
+  }
+  if (!startedBefore) {
+    setBreakEnabled(false);
+  }
+
+  const mode = getServicePeriodsMode(ServiceStatus.ACTIVE);
+  if (mode === lastServicePeriodsMode) {
+    return;
+  }
+
+  captureActivePeriodValues();
+  servicePeriodsPrimaryList.replaceChildren();
+  servicePeriodsExtraList.replaceChildren();
+  lastServicePeriodsMode = mode;
+
+  if (!startedBefore) {
+    const afterRow = createServicePeriodRow(PERIOD_KIND_AFTER, {
+      showTitle: false,
+      showEnd: false,
+      startLabel: LABEL_AFTER_START,
+    });
+    servicePeriodsPrimaryList.appendChild(afterRow);
+    fillPeriodInputs(afterRow, preservedAfterPeriodValues);
+    return;
+  }
+
+  const beforeStartRow = createServicePeriodRow(PERIOD_KIND_BEFORE, {
+    showTitle: false,
+    showEnd: false,
+    startLabel: LABEL_BEFORE_START_ACTIVE,
+    idSuffix: "before-start",
+  });
+  servicePeriodsPrimaryList.appendChild(beforeStartRow);
+  fillPeriodInputs(beforeStartRow, preservedBeforePeriodValues);
+
+  if (!isBreakEnabled()) {
+    return;
+  }
+
+  const beforeEndRow = createServicePeriodRow(PERIOD_KIND_BEFORE, {
+    showTitle: false,
+    showEnd: true,
+    showStart: false,
+    endLabel: LABEL_BEFORE_END_ACTIVE,
+    idSuffix: "before-end",
+  });
+  servicePeriodsExtraList.appendChild(beforeEndRow);
+  fillPeriodInputs(beforeEndRow, preservedBeforePeriodValues);
+
+  const afterRow = createServicePeriodRow(PERIOD_KIND_AFTER, {
+    showTitle: false,
+    showEnd: false,
+    startLabel: LABEL_AFTER_START,
+  });
+  servicePeriodsExtraList.appendChild(afterRow);
+  fillPeriodInputs(afterRow, preservedAfterPeriodValues);
 }
 
 function ensureServicePeriods() {
   const status = getSelectedServiceStatus();
 
   if (status !== ServiceStatus.ACTIVE && status !== ServiceStatus.DISCHARGED) {
+    setStartedBeforeEnabled(false);
+    setBreakEnabled(false);
     setBeforePeriodEnabled(false);
     clearServicePeriods();
+    syncServicePeriodToggleVisibility(status);
     return;
   }
 
-  // DISCHARGED: only optional before-2022 via toggle.
+  syncServicePeriodToggleVisibility(status);
+
   if (status === ServiceStatus.DISCHARGED) {
-    removeAfterPeriodRow();
-    syncBeforePeriodFromToggle();
+    ensureDischargedServicePeriods();
     return;
   }
 
-  // ACTIVE: after first, then toggle-controlled before.
-  ensureAfterPeriodRow();
-  syncBeforePeriodFromToggle();
+  ensureActiveServicePeriods();
 }
 
 /**
@@ -646,14 +845,20 @@ function getCurrentStepId() {
 
 function areServicePeriodsFilled(status) {
   if (status === ServiceStatus.ACTIVE) {
-    const after = readPeriodByKind(PERIOD_KIND_AFTER);
-    if (!after || !after.startDate) return false;
-
-    if (isBeforePeriodEnabled()) {
-      const before = readPeriodByKind(PERIOD_KIND_BEFORE);
-      if (!before || !before.startDate || !before.endDate) return false;
+    if (!isStartedBeforeEnabled()) {
+      const after = readPeriodByKind(PERIOD_KIND_AFTER);
+      return !!(after && after.startDate);
     }
-    return true;
+
+    const before = readActiveBeforePeriod();
+    if (!before || !before.startDate) return false;
+
+    if (!isBreakEnabled()) {
+      return true;
+    }
+
+    const after = readPeriodByKind(PERIOD_KIND_AFTER);
+    return !!(before.endDate && after && after.startDate);
   }
 
   if (status === ServiceStatus.DISCHARGED) {
@@ -1174,10 +1379,15 @@ function clearWizardForm() {
     combatDaysInput.value = "0";
   }
 
+  setStartedBeforeEnabled(false);
+  setBreakEnabled(false);
   setBeforePeriodEnabled(false);
-  if (servicePeriodsAfterList) servicePeriodsAfterList.replaceChildren();
+  if (servicePeriodsPrimaryList) servicePeriodsPrimaryList.replaceChildren();
+  if (servicePeriodsExtraList) servicePeriodsExtraList.replaceChildren();
   if (servicePeriodsBeforeList) servicePeriodsBeforeList.replaceChildren();
   preservedBeforePeriodValues = null;
+  preservedAfterPeriodValues = null;
+  lastServicePeriodsMode = null;
   syncStatusFields();
   syncCombatFields();
 }
@@ -1256,10 +1466,26 @@ function collectInputSummaryRows(result) {
   const status = getSelectedServiceStatus();
   const type = getSelectedContractType();
   const combatUnitType = getEffectiveCombatUnitType();
-  const beforePeriod = readPeriodByKind(PERIOD_KIND_BEFORE);
-  const afterPeriod = readPeriodByKind(PERIOD_KIND_AFTER);
   const contractStartDate = parseDateInput("contract-start-date");
   const combatDays = parseIntegerInput("combat-days-input");
+
+  let beforePeriod = readPeriodByKind(PERIOD_KIND_BEFORE);
+  let afterPeriod = readPeriodByKind(PERIOD_KIND_AFTER);
+
+  if (
+    status === ServiceStatus.ACTIVE &&
+    isStartedBeforeEnabled() &&
+    !isBreakEnabled()
+  ) {
+    const continuousBefore = readActiveBeforePeriod();
+    if (continuousBefore && continuousBefore.startDate) {
+      beforePeriod = {
+        startDate: continuousBefore.startDate,
+        endDate: new Date(2022, 1, 23),
+      };
+      afterPeriod = { startDate: new Date(2022, 1, 24) };
+    }
+  }
 
   /** @type {{ label: string, value: string }[]} */
   const rows = [];
@@ -1271,9 +1497,12 @@ function collectInputSummaryRows(result) {
     });
   }
 
-  if (beforePeriod) {
+  if (beforePeriod && beforePeriod.startDate && beforePeriod.endDate) {
     rows.push({
-      label: TITLE_BEFORE,
+      label:
+        status === ServiceStatus.ACTIVE
+          ? LABEL_BEFORE_START_ACTIVE
+          : TITLE_BEFORE,
       value:
         formatDisplayDate(beforePeriod.startDate) +
         " – " +
@@ -1281,7 +1510,7 @@ function collectInputSummaryRows(result) {
     });
   }
 
-  if (afterPeriod) {
+  if (afterPeriod && afterPeriod.startDate) {
     rows.push({
       label: LABEL_AFTER_START,
       value: formatDisplayDate(afterPeriod.startDate),
@@ -1586,6 +1815,24 @@ function buildInput() {
     input.servicePeriodAfter2022 = afterPeriod;
   }
 
+  // ACTIVE continuous service across 24.02.2022: auto-split at war start.
+  if (
+    serviceStatus === ServiceStatus.ACTIVE &&
+    isStartedBeforeEnabled() &&
+    !isBreakEnabled()
+  ) {
+    const before = readActiveBeforePeriod();
+    if (before && before.startDate) {
+      input.servicePeriodBefore2022 = {
+        startDate: before.startDate,
+        endDate: new Date(2022, 1, 23),
+      };
+      input.servicePeriodAfter2022 = {
+        startDate: new Date(2022, 1, 24),
+      };
+    }
+  }
+
   if (requiresContractTermChoice(serviceStatus, contractType)) {
     input.contractTermChoice = termChoice;
   }
@@ -1672,9 +1919,23 @@ if (wizardEdit) {
   wizardEdit.addEventListener("click", returnToWizard);
 }
 
+if (serviceStartedBeforeToggle) {
+  serviceStartedBeforeToggle.addEventListener("change", function () {
+    ensureServicePeriods();
+    onWizardInputChange();
+  });
+}
+
+if (serviceBreakToggle) {
+  serviceBreakToggle.addEventListener("change", function () {
+    ensureServicePeriods();
+    onWizardInputChange();
+  });
+}
+
 if (serviceBeforeToggle) {
   serviceBeforeToggle.addEventListener("change", function () {
-    syncBeforePeriodFromToggle();
+    ensureServicePeriods();
     onWizardInputChange();
   });
 }
