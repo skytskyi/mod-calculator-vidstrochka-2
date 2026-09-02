@@ -1306,22 +1306,54 @@ body.mod-nav-open {
   color: var(--text-strong);
 }
 
-.wizard-results__intro {
+.wizard-info-box {
   margin: 0 0 24px;
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 300;
+  padding: 16px 18px;
+  border: 1px dashed var(--orange);
+  border-radius: var(--radius-card);
+  background: rgba(243, 146, 0, 0.08);
+}
+
+.wizard-info-box--with-icon {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.wizard-info-box__icon {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  color: var(--orange);
+}
+
+.wizard-info-box__icon svg {
+  display: block;
+  width: 20px;
+  height: 20px;
+}
+
+.wizard-info-box__body {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.wizard-info-box__text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 400;
   color: #212121;
 }
 
-.wizard-results__intro a {
+.wizard-info-box__text a {
   color: inherit;
   font-weight: 400;
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
-.wizard-results__intro a:hover {
+.wizard-info-box__text a:hover {
   color: var(--text-strong);
 }
 
