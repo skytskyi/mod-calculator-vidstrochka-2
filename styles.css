@@ -1648,6 +1648,20 @@ body.mod-nav-open {
   display: none !important;
 }
 
+.switch-group-card {
+  margin-top: 0;
+  padding: 0;
+  overflow: hidden;
+  background: var(--main-bg);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-card);
+}
+
+.switch-group-card > .switch-field {
+  margin-top: 0;
+  padding: 16px 18px;
+}
+
 .switch-field {
   display: flex;
   align-items: center;
@@ -1667,13 +1681,21 @@ body.mod-nav-open {
   margin-top: 24px;
 }
 
-.switch-field + .service-periods__list:not(:empty),
-.service-periods__list:not(:empty) + .switch-field {
+#service-before-toggle-wrap + .service-periods__list:not(:empty),
+.service-periods__list:not(:empty) + #service-before-toggle-wrap {
   margin-top: 24px;
 }
 
-.service-periods > .switch-field:first-child {
+.service-periods > #service-before-toggle-wrap:first-child {
   margin-top: 0;
+}
+
+#service-before-toggle-wrap[hidden] {
+  display: none !important;
+}
+
+#service-before-toggle-wrap > .field__legend {
+  margin-bottom: 8px;
 }
 
 .switch-field__text {

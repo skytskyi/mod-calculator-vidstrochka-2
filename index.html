@@ -106,11 +106,11 @@
                               <span class="radio-card__ui"></span>
                               <span class="radio-card__content">
                                 <span class="radio-card__text"
-                                  >Служба вперше розпочалася 24.02.2022 або
+                                  >Вперше почали служити 24.02.2022 або
                                   пізніше</span
                                 >
                                 <span class="radio-card__term"
-                                  >Попередніх періодів служби не було.</span
+                                  >Раніше військову службу не проходили</span
                                 >
                               </span>
                             </label>
@@ -123,12 +123,11 @@
                               <span class="radio-card__ui"></span>
                               <span class="radio-card__content">
                                 <span class="radio-card__text"
-                                  >Безперервна служба триває ще з періоду до
-                                  24.02.2022</span
+                                  >Почали служити до 24.02.2022 і відтоді не
+                                  звільнялися</span
                                 >
                                 <span class="radio-card__term"
-                                  >Звільнення після початку поточного періоду не
-                                  було.</span
+                                  >Служба триває безперервно</span
                                 >
                               </span>
                             </label>
@@ -141,13 +140,12 @@
                               <span class="radio-card__ui"></span>
                               <span class="radio-card__content">
                                 <span class="radio-card__text"
-                                  >Поточна служба розпочалася після попереднього
-                                  звільнення</span
+                                  >Служили раніше, звільнилися, а 24.02.2022 або
+                                  пізніше почали служити знову</span
                                 >
                                 <span class="radio-card__term"
-                                  >Попередній період завершився до 24.02.2022, а
-                                  поточний розпочався 24.02.2022 або
-                                  пізніше.</span
+                                  >Попередня служба завершилася до
+                                  24.02.2022</span
                                 >
                               </span>
                             </label>
@@ -164,22 +162,23 @@
                           id="service-periods-extra-list"
                         ></div>
 
-                        <label
-                          class="switch-field"
-                          id="service-before-toggle-wrap"
-                          hidden
-                        >
-                          <span class="switch-field__text"
-                            >Маю безперервний період служби до 24.02.2022</span
-                          >
-                          <input
-                            type="checkbox"
-                            class="switch-field__input"
-                            id="service-before-toggle"
-                            name="hadServiceBefore2022"
-                          />
-                          <span class="switch-field__ui" aria-hidden="true"></span>
-                        </label>
+                        <div id="service-before-toggle-wrap" hidden>
+                          <h3 class="field__legend">Служби до 24.02.2022</h3>
+                          <div class="switch-group-card">
+                            <label class="switch-field">
+                              <span class="switch-field__text"
+                                >Маю безперервний період служби до 24.02.2022</span
+                              >
+                              <input
+                                type="checkbox"
+                                class="switch-field__input"
+                                id="service-before-toggle"
+                                name="hadServiceBefore2022"
+                              />
+                              <span class="switch-field__ui" aria-hidden="true"></span>
+                            </label>
+                          </div>
+                        </div>
 
                         <div
                           class="service-periods__list service-periods__before"
