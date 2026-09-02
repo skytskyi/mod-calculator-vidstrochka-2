@@ -157,16 +157,12 @@ const PERIOD_KIND_BEFORE = "before";
 const PERIOD_KIND_AFTER = "after";
 const TITLE_BEFORE =
   "Останній безперервний період служби до 24.02.2022";
-const TITLE_BEFORE_ACTIVE =
-  "Безперервний період служби до 24.02.2022";
 const LABEL_AFTER_START =
   "Дата початку військової служби (з 24.02.2022)";
 const LABEL_BEFORE_START = "Дата початку військової служби";
 const LABEL_BEFORE_START_ACTIVE =
   "Дата початку військової служби (перед 24.02.2022)";
 const LABEL_BEFORE_END = "Дата звільнення з військової служби";
-const LABEL_BEFORE_END_ACTIVE =
-  "Дата звільнення з військової служби (перед 24.02.2022)";
 const WAR_START_ISO = "2022-02-24";
 const DAY_BEFORE_WAR_ISO = "2022-02-23";
 
@@ -578,7 +574,7 @@ function ensureActiveServicePeriods() {
   const beforeRow = createServicePeriodRow(PERIOD_KIND_BEFORE, {
     showTitle: true,
     showEnd: true,
-    title: TITLE_BEFORE_ACTIVE,
+    title: TITLE_BEFORE,
     startLabel: LABEL_BEFORE_START,
     endLabel: LABEL_BEFORE_END,
   });
@@ -1623,10 +1619,7 @@ function collectInputSummaryRows(result) {
 
   if (beforePeriod && beforePeriod.startDate && beforePeriod.endDate) {
     rows.push({
-      label:
-        status === ServiceStatus.ACTIVE
-          ? TITLE_BEFORE_ACTIVE
-          : TITLE_BEFORE,
+      label: TITLE_BEFORE,
       value:
         formatDisplayDate(beforePeriod.startDate) +
         " – " +
