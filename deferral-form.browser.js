@@ -157,6 +157,7 @@ const PERIOD_KIND_BEFORE = "before";
 const PERIOD_KIND_AFTER = "after";
 const TITLE_BEFORE =
   "Останній безперервний період служби до 24.02.2022";
+const TITLE_CURRENT_SERVICE = "Поточна служба";
 const LABEL_AFTER_START =
   "Дата початку військової служби (з 24.02.2022)";
 const LABEL_BEFORE_START = "Дата початку військової служби";
@@ -284,7 +285,10 @@ function createDateField(inputId, fieldName, options) {
  */
 function createServicePeriodRow(kind, options) {
   const opts = options || {};
-  const showTitle = opts.showTitle !== false && kind === PERIOD_KIND_BEFORE;
+  const showTitle =
+    opts.showTitle != null
+      ? !!opts.showTitle
+      : kind === PERIOD_KIND_BEFORE;
   const showEnd = opts.showEnd !== false && kind === PERIOD_KIND_BEFORE;
   const startLabelText =
     opts.startLabel ||
@@ -582,11 +586,12 @@ function ensureActiveServicePeriods() {
   fillPeriodInputs(beforeRow, preservedBeforePeriodValues);
 
   const afterRow = createServicePeriodRow(PERIOD_KIND_AFTER, {
-    showTitle: false,
+    showTitle: true,
     showEnd: false,
+    title: TITLE_CURRENT_SERVICE,
     startLabel: LABEL_AFTER_START,
   });
-  servicePeriodsPrimaryList.appendChild(afterRow);
+  servicePeriodsExtraList.appendChild(afterRow);
   fillPeriodInputs(afterRow, preservedAfterPeriodValues);
 }
 
